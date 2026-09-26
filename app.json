@@ -12,6 +12,17 @@
     },
     "android": {
       "package": "com.scamshield.security",
+      "permissions": [
+        "RECEIVE_SMS",
+        "READ_SMS",
+        "BIND_NOTIFICATION_LISTENER_SERVICE",
+        "BIND_ACCESSIBILITY_SERVICE",
+        "BIND_INPUT_METHOD",
+        "SYSTEM_ALERT_WINDOW",
+        "INTERNET",
+        "READ_MEDIA_IMAGES",
+        "READ_EXTERNAL_STORAGE"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#2563EB",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

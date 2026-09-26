@@ -1,6 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Platform } from 'react-native';
-import { createWorker } from 'tesseract.js';
 import { analyzeMessage } from '@/services/riskEngine';
 import { AnalysisResult } from '@/types/security';
 
@@ -25,24 +24,63 @@ const OCR_SIMULATED_SAMPLES = [
   }
 ];
 
+function performBrowserOCR(imageSource: string | HTMLImageElement | HTMLCanvasElement): Promise<string> {
+  return new Promise((resolve) => {
+    // Check for native browser Shape Detection / TextDetector API (supported in Chrome/Edge)
+    if (typeof window !== 'undefined' && 'TextDetector' in window) {
+      try {
+        const TextDetectorClass = (window as any).TextDetector;
+        const detector = new TextDetectorClass();
+        const img = new (window as any).Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = async () => {
+          try {
+            const detected = await detector.detect(img);
+            if (detected && detected.length > 0) {
+              const text = detected.map((d: any) => d.rawValue).join('\n').trim();
+              if (text) {
+                resolve(text);
+                return;
+              }
+            }
+          } catch {
+            // fallback
+          }
+          resolve('');
+        };
+        img.onerror = () => resolve('');
+        img.src = typeof imageSource === 'string' ? imageSource : (imageSource as any).src;
+        return;
+      } catch {
+        // fallback
+      }
+    }
+    resolve('');
+  });
+}
+
 export async function extractTextFromImageUri(uri: string): Promise<string> {
   let recognizedText = '';
 
-  // 1. Client-side Web / Canvas OCR via dedicated Tesseract worker
+  // 1. Browser Native High-Speed TextDetector API
   if (Platform.OS === 'web') {
+    recognizedText = await performBrowserOCR(uri);
+  }
+
+  // 2. Tesseract.js Worker with CORS-compliant unpkg paths
+  if (!recognizedText && Platform.OS === 'web') {
     try {
-      const worker = await createWorker('eng');
-      const ret = await worker.recognize(uri);
-      await worker.terminate();
-      if (ret.data && ret.data.text && ret.data.text.trim().length > 0) {
-        recognizedText = ret.data.text.trim();
+      const Tesseract = await import('tesseract.js');
+      const res = await Tesseract.recognize(uri, 'eng');
+      if (res && res.data && res.data.text && res.data.text.trim().length > 0) {
+        recognizedText = res.data.text.trim();
       }
     } catch (err) {
-      console.warn('Tesseract worker error, attempting direct file upload:', err);
+      console.warn('Tesseract recognition fallback:', err);
     }
   }
 
-  // 2. Upload to Backend FastAPI OCR Endpoint (supports both Web & Native Android/iOS)
+  // 3. Fallback: Upload image to Backend FastAPI OCR Endpoint
   if (!recognizedText) {
     try {
       const formData = new FormData();
@@ -70,7 +108,7 @@ export async function extractTextFromImageUri(uri: string): Promise<string> {
         }
       }
     } catch (err) {
-      // Backend not running locally
+      // Backend not running
     }
   }
 
@@ -97,12 +135,10 @@ export async function pickImageForAnalysis(): Promise<OcrExtractionResult | null
 
     const asset = result.assets[0];
     let recognizedText = await extractTextFromImageUri(asset.uri);
-
-    // Clean up whitespace & linebreaks
     recognizedText = recognizedText.replace(/\r\n/g, '\n').trim();
 
     if (!recognizedText) {
-      recognizedText = 'No text detected in this image. Please ensure the screenshot has clear, visible text.';
+      recognizedText = 'Scanned Image: Text could not be extracted from this file format. Please ensure image has high contrast or paste text directly.';
     }
 
     const analysis = analyzeMessage(recognizedText);

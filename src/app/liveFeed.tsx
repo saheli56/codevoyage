@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BellRinging, ShieldWarning, ShieldCheck, Lightning, ChatCircleDots, DeviceMobile, CreditCard, Trash, ShieldSlash } from 'phosphor-react-native';
+import { BellRinging, ShieldWarning, ShieldCheck, Lightning, ChatCircleDots, DeviceMobile, CreditCard, Trash, Keyboard, CheckCircle } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { InterceptedNotification, getLiveNotificationFeed, pushInterceptedNotification, clearLiveFeed } from '@/services/liveNotificationFeed';
+import { getStoredPermissions, requestAllSecurityPermissions, PermissionStatusState } from '@/services/permissionsManager';
 import { useAppMode } from '@/context/AppModeContext';
 import { ModeBadge } from '@/components/ui/mode-badge';
 import { RiskBadge } from '@/components/ui/risk-badge';
@@ -15,17 +16,30 @@ export default function LiveFeedScreen() {
   const [filter, setFilter] = useState<'ALL' | 'THREATS_ONLY' | 'SAFE_ONLY'>('ALL');
   const [refreshing, setRefreshing] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [permissionState, setPermissionState] = useState<PermissionStatusState>({
+    smsPermission: 'PROMPT',
+    notificationListener: 'PROMPT',
+    keyboardProtection: 'PROMPT',
+    overlayPermission: 'PROMPT',
+  });
 
   const fetchFeed = async () => {
     setRefreshing(true);
     const data = await getLiveNotificationFeed(isDemoMode);
     setFeed(data);
+    const perms = await getStoredPermissions();
+    setPermissionState(perms);
     setRefreshing(false);
   };
 
   useEffect(() => {
     fetchFeed();
   }, [isDemoMode]);
+
+  const handleGrantPermissions = async () => {
+    const updated = await requestAllSecurityPermissions();
+    setPermissionState(updated);
+  };
 
   const handleSimulateNewIncoming = async (type: 'DANGEROUS' | 'SAFE') => {
     if (type === 'DANGEROUS') {
@@ -147,6 +161,23 @@ export default function LiveFeedScreen() {
         </Text>
       </View>
 
+      {permissionState.notificationListener !== 'GRANTED' && (
+        <View style={styles.permissionBanner}>
+          <View style={styles.permissionInfo}>
+            <View style={styles.permHeaderRow}>
+              <Keyboard size={14} color={Palette.brand.primaryDark} weight="bold" />
+              <Text style={styles.permissionTitle}>SMS, Notification & Keyboard Guard</Text>
+            </View>
+            <Text style={styles.permissionSub}>
+              Enable Android Notification Listener & Keyboard Input Guard to detect smishing and phishing keystrokes in real-time.
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.grantBtn} onPress={handleGrantPermissions}>
+            <Text style={styles.grantBtnText}>Grant Access</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={styles.filterBar}>
         <TouchableOpacity 
           style={[styles.filterPill, filter === 'ALL' && styles.filterPillActive]}
@@ -255,6 +286,47 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Palette.neutral.slate500,
     marginTop: 2,
+  },
+  permissionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Palette.brand.primaryMuted,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two,
+    borderBottomWidth: 1,
+    borderBottomColor: Palette.brand.primaryLight,
+  },
+  permissionInfo: {
+    flex: 1,
+    marginRight: Spacing.two,
+  },
+  permHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  permissionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Palette.brand.primaryDark,
+  },
+  permissionSub: {
+    fontSize: 10,
+    color: Palette.neutral.slate600,
+    lineHeight: 14,
+  },
+  grantBtn: {
+    backgroundColor: Palette.brand.primary,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: Radius.sm,
+  },
+  grantBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   filterBar: {
     flexDirection: 'row',

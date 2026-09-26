@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Switch, AppState, Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Shield, Sparkle, Trash, ClipboardText, Translate, BellRinging, Lightning, Camera, ImageSquare, X, UploadSimple } from 'phosphor-react-native';
+import { Shield, Sparkle, Trash, ClipboardText, Translate, BellRinging, Lightning, Camera, ImageSquare, X, ArrowDown } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { analyzeMessage } from '@/services/riskEngine';
 import { saveAnalysisResult } from '@/services/storageService';
@@ -26,19 +26,32 @@ export default function HomeScreen() {
   const [isProcessingOcr, setIsProcessingOcr] = useState(false);
   const lastProcessedText = useRef('');
 
+  // Continuous listener + Foreground trigger
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', async (nextAppState) => {
-      if (nextAppState === 'active' && isAutoProtectionActive) {
-        const detected = await checkClipboardForThreats(lastProcessedText.current);
-        if (detected) {
-          lastProcessedText.current = detected.text;
-          setInputText(detected.text);
-          setAnalysisResult(detected.result);
-        }
+    const scanClipboard = async () => {
+      if (!isAutoProtectionActive) return;
+      const detected = await checkClipboardForThreats(lastProcessedText.current);
+      if (detected) {
+        lastProcessedText.current = detected.text;
+        setInputText(detected.text);
+        setAnalysisResult(detected.result);
+      }
+    };
+
+    // Scan immediately on mount
+    scanClipboard();
+
+    // Scan every 2.5 seconds or on app focus
+    const interval = setInterval(scanClipboard, 2500);
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        scanClipboard();
       }
     });
 
     return () => {
+      clearInterval(interval);
       subscription.remove();
     };
   }, [isAutoProtectionActive]);
@@ -87,6 +100,16 @@ export default function HomeScreen() {
     setInputText(simulatedText);
     const res = await simulateIncomingNotificationScan('VM-SBINB', simulatedText);
     setAnalysisResult(res);
+  };
+
+  const handlePasteAndScan = async () => {
+    const detected = await checkClipboardForThreats('');
+    if (detected) {
+      setInputText(detected.text);
+      setAnalysisResult(detected.result);
+    } else {
+      Alert.alert('Clipboard Checked', 'No high-risk scam or threat patterns detected in your clipboard.');
+    }
   };
 
   return (
@@ -184,6 +207,11 @@ export default function HomeScreen() {
             >
               <Sparkle size={18} color="#FFFFFF" weight="bold" />
               <Text style={styles.primaryButtonText}>Analyze Signals</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.clipboardScanBtn} onPress={handlePasteAndScan}>
+              <ClipboardText size={16} color={Palette.brand.primary} />
+              <Text style={styles.clipboardScanBtnText}>Check Clipboard</Text>
             </TouchableOpacity>
 
             {inputText.length > 0 && (
@@ -381,6 +409,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: Spacing.three,
+    gap: Spacing.one,
   },
   primaryButton: {
     flexDirection: 'row',
@@ -388,10 +417,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: Palette.brand.primary,
     paddingVertical: 10,
-    paddingHorizontal: Spacing.four,
+    paddingHorizontal: Spacing.three,
     borderRadius: Radius.md,
     gap: Spacing.two,
     flex: 1,
+  },
+  clipboardScanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Palette.brand.primaryMuted,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radius.md,
+  },
+  clipboardScanBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Palette.brand.primaryDark,
   },
   disabledButton: {
     backgroundColor: Palette.neutral.slate300,
@@ -403,7 +446,6 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     padding: 10,
-    marginLeft: Spacing.two,
     borderRadius: Radius.md,
     backgroundColor: Palette.neutral.slate100,
   },
