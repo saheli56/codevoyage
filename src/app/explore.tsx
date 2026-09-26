@@ -1,11 +1,36 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Switch, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Switch,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  withSequence,
+  Easing,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CurrencyInr, WarningCircle, ArrowCounterClockwise, ShieldCheck } from 'phosphor-react-native';
+import {
+  CurrencyInr,
+  WarningCircle,
+  ArrowCounterClockwise,
+  ShieldCheck,
+} from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { analyzePaymentRisk } from '@/services/paymentAnalyzer';
 import { saveAnalysisResult } from '@/services/storageService';
 import { useAppMode } from '@/context/AppModeContext';
+import { useAppTheme } from '@/context/ThemeContext';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { ModeBadge } from '@/components/ui/mode-badge';
 import { AnalysisResult } from '@/types/security';
 import { EvidenceCard } from '@/components/ui/evidence-card';
@@ -14,24 +39,81 @@ const SAMPLE_SCAM_PAYMENT = {
   amount: '15000',
   recipientVpa: 'sbi-lottery-support@okaxis',
   isNewBeneficiary: true,
-  contextNote: 'Refund processing registration fee'
+  contextNote: 'Refund processing registration fee',
 };
+
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 export default function PaymentRiskScreen() {
   const insets = useSafeAreaInsets();
   const { isDemoMode } = useAppMode();
+  const { colors, isDark } = useAppTheme();
   const [amount, setAmount] = useState('');
   const [recipientVpa, setRecipientVpa] = useState('');
   const [contextNote, setContextNote] = useState('');
   const [isNewBeneficiary, setIsNewBeneficiary] = useState(true);
   const [result, setResult] = useState<AnalysisResult | null>(null);
 
+  // Form card entrance animation
+  const cardOpacity = useSharedValue(0);
+  const cardTranslateY = useSharedValue(20);
+
+  // Evidence card entrance animation
+  const evidenceOpacity = useSharedValue(0);
+  const evidenceScale = useSharedValue(0.95);
+
+  // Primary button press scale
+  const buttonScale = useSharedValue(1);
+
+  useEffect(() => {
+    cardOpacity.value = withTiming(1, {
+      duration: 450,
+      easing: Easing.out(Easing.quad),
+    });
+    cardTranslateY.value = withTiming(0, {
+      duration: 450,
+      easing: Easing.out(Easing.quad),
+    });
+  }, []);
+
+  useEffect(() => {
+    if (result) {
+      evidenceOpacity.value = withTiming(1, { duration: 380, easing: Easing.out(Easing.quad) });
+      evidenceScale.value = withSpring(1, { damping: 18, stiffness: 200 });
+    } else {
+      evidenceOpacity.value = 0;
+      evidenceScale.value = 0.95;
+    }
+  }, [result]);
+
+  const cardAnimStyle = useAnimatedStyle(() => ({
+    opacity: cardOpacity.value,
+    transform: [{ translateY: cardTranslateY.value }],
+  }));
+
+  const evidenceAnimStyle = useAnimatedStyle(() => ({
+    opacity: evidenceOpacity.value,
+    transform: [{ scale: evidenceScale.value }],
+  }));
+
+  const buttonAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: buttonScale.value }],
+  }));
+
+  const handleButtonPressIn = () => {
+    buttonScale.value = withSpring(0.97, { damping: 20, stiffness: 300 });
+  };
+
+  const handleButtonPressOut = () => {
+    buttonScale.value = withSpring(1, { damping: 20, stiffness: 300 });
+  };
+
   const handleAssess = async (customParams?: typeof SAMPLE_SCAM_PAYMENT) => {
     const params = customParams || {
       amount,
       recipientVpa,
       isNewBeneficiary,
-      contextNote
+      contextNote,
     };
 
     if (!params.recipientVpa.trim()) return;
@@ -58,40 +140,47 @@ export default function PaymentRiskScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={[styles.container, { paddingTop: insets.top }]}
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.base, paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={[
-          styles.scrollContent, 
-          { paddingBottom: insets.bottom + 90 }
-        ]} 
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 90 },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* Header */}
         <View style={styles.header}>
           <View style={styles.topRow}>
-            <View style={styles.badgeRow}>
-              <CurrencyInr size={22} color={Palette.brand.primary} weight="bold" />
-              <Text style={styles.screenTitle}>Payment Risk Simulator</Text>
+            <View style={styles.titleGroup}>
+              <CurrencyInr size={20} color={Palette.brand.primary} weight="bold" />
+              <View style={styles.titleTextGroup}>
+                <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>Payment Risk</Text>
+                <Text style={[styles.screenSubtitle, { color: colors.textMuted }]}>
+                  Pre-flight screening before authorizing UPI or NetBanking transfers.
+                </Text>
+              </View>
             </View>
-            <ModeBadge />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
+              <ModeBadge />
+              <ThemeToggle />
+            </View>
           </View>
-          <Text style={styles.screenSubtitle}>
-            Pre-flight transaction screening before authorizing UPI or NetBanking transfers.
-          </Text>
         </View>
 
-        <View style={styles.formCard}>
-          <Text style={styles.formSectionLabel}>TRANSACTION PARAMETERS</Text>
+        {/* Form card */}
+        <Animated.View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }, cardAnimStyle]}>
+          <Text style={[styles.formSectionLabel, { color: colors.textMuted }]}>TRANSACTION PARAMETERS</Text>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Transfer Amount (INR)</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Transfer Amount (INR)</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
               placeholder="e.g. 5000"
-              placeholderTextColor={Palette.neutral.slate400}
+              placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
               value={amount}
               onChangeText={setAmount}
@@ -99,11 +188,11 @@ export default function PaymentRiskScreen() {
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Recipient UPI ID / VPA</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Recipient UPI ID / VPA</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
               placeholder="e.g. merchant@okaxis or user@upi"
-              placeholderTextColor={Palette.neutral.slate400}
+              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               value={recipientVpa}
               onChangeText={setRecipientVpa}
@@ -111,45 +200,59 @@ export default function PaymentRiskScreen() {
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Payment Purpose / Remarks</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Payment Purpose / Remarks</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
               placeholder="e.g. advance tax, refund fee, verification"
-              placeholderTextColor={Palette.neutral.slate400}
+              placeholderTextColor={colors.textMuted}
               value={contextNote}
               onChangeText={setContextNote}
             />
           </View>
 
-          <View style={styles.switchRow}>
+          <View style={[styles.switchRow, { borderTopColor: colors.divider }]}>
             <View style={styles.switchTextContainer}>
-              <Text style={styles.switchLabel}>First-Time Beneficiary</Text>
-              <Text style={styles.switchSubtext}>No prior transaction history with this recipient</Text>
+              <Text style={[styles.switchLabel, { color: colors.textPrimary }]}>First-Time Beneficiary</Text>
+              <Text style={[styles.switchSubtext, { color: colors.textMuted }]}>
+                No prior transaction history with this recipient
+              </Text>
             </View>
             <Switch
               value={isNewBeneficiary}
               onValueChange={setIsNewBeneficiary}
-              trackColor={{ false: Palette.neutral.slate200, true: Palette.brand.primary }}
+              trackColor={{
+                false: colors.divider,
+                true: '#2563EB',
+              }}
               thumbColor="#FFFFFF"
             />
           </View>
 
           <View style={styles.actionRow}>
-            <TouchableOpacity 
-              style={[styles.primaryButton, !recipientVpa.trim() && styles.disabledButton]}
-              onPress={() => handleAssess()}
-              disabled={!recipientVpa.trim()}
-            >
-              <ShieldCheck size={18} color="#FFFFFF" weight="bold" />
-              <Text style={styles.primaryButtonText}>Assess Payment Risk</Text>
-            </TouchableOpacity>
+            <Animated.View style={[styles.primaryButtonWrapper, buttonAnimStyle]}>
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  !recipientVpa.trim() && [styles.disabledButton, { backgroundColor: isDark ? Palette.neutral.slate700 : Palette.neutral.slate300 }],
+                ]}
+                onPress={() => handleAssess()}
+                onPressIn={handleButtonPressIn}
+                onPressOut={handleButtonPressOut}
+                disabled={!recipientVpa.trim()}
+                activeOpacity={1}
+              >
+                <ShieldCheck size={18} color="#FFFFFF" weight="bold" />
+                <Text style={styles.primaryButtonText}>Assess Payment Risk</Text>
+              </TouchableOpacity>
+            </Animated.View>
 
-            <TouchableOpacity style={styles.iconButton} onPress={handleReset}>
-              <ArrowCounterClockwise size={18} color={Palette.neutral.slate500} />
+            <TouchableOpacity style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.cardBorder }]} onPress={handleReset}>
+              <ArrowCounterClockwise size={18} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
 
+        {/* Demo mode simulation card */}
         {isDemoMode && (
           <View style={styles.quickTestsContainer}>
             <Text style={styles.testLabel}>SIMULATE RISK SCENARIO (DEMO MODE)</Text>
@@ -160,8 +263,11 @@ export default function PaymentRiskScreen() {
           </View>
         )}
 
+        {/* Evidence card result */}
         {result && (
-          <EvidenceCard result={result} />
+          <Animated.View style={evidenceAnimStyle}>
+            <EvidenceCard result={result} />
+          </Animated.View>
         )}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -171,7 +277,6 @@ export default function PaymentRiskScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Palette.neutral.slate50,
   },
   scrollContent: {
     padding: Spacing.four,
@@ -183,57 +288,54 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
-  badgeRow: {
+  titleGroup: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
+    alignItems: 'flex-start',
+    gap: Spacing.two,
+    flex: 1,
+    marginRight: Spacing.two,
+  },
+  titleTextGroup: {
+    flex: 1,
   },
   screenTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '800',
-    color: Palette.neutral.slate900,
     letterSpacing: -0.5,
   },
   screenSubtitle: {
     fontSize: 12,
-    color: Palette.neutral.slate500,
-    marginTop: 2,
+    marginTop: 3,
     lineHeight: 18,
   },
   formCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
     padding: Spacing.four,
     borderWidth: 1,
-    borderColor: Palette.neutral.slate200,
   },
   formSectionLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
-    color: Palette.neutral.slate500,
-    letterSpacing: 0.8,
-    marginBottom: Spacing.two,
+    letterSpacing: 1.2,
+    marginBottom: Spacing.three,
+    textTransform: 'uppercase',
   },
   fieldGroup: {
-    marginBottom: Spacing.two,
+    marginBottom: Spacing.three,
   },
   label: {
     fontSize: 12,
     fontWeight: '600',
-    color: Palette.neutral.slate700,
     marginBottom: Spacing.one,
   },
   input: {
-    backgroundColor: Palette.neutral.slate50,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.three,
-    paddingVertical: 8,
+    paddingVertical: 10,
     fontSize: 14,
-    color: Palette.neutral.slate900,
     borderWidth: 1,
-    borderColor: Palette.neutral.slate200,
   },
   switchRow: {
     flexDirection: 'row',
@@ -241,9 +343,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: Spacing.two,
     borderTopWidth: 1,
-    borderTopColor: Palette.neutral.slate100,
     marginTop: Spacing.one,
-    marginBottom: Spacing.two,
+    marginBottom: Spacing.three,
   },
   switchTextContainer: {
     flex: 1,
@@ -252,51 +353,55 @@ const styles = StyleSheet.create({
   switchLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: Palette.neutral.slate900,
   },
   switchSubtext: {
     fontSize: 11,
-    color: Palette.neutral.slate500,
     marginTop: 2,
   },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Spacing.one,
+  },
+  primaryButtonWrapper: {
+    flex: 1,
   },
   primaryButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Palette.brand.primary,
-    paddingVertical: 10,
+    backgroundColor: '#2563EB',
+    paddingVertical: 14,
     borderRadius: Radius.md,
     gap: Spacing.two,
   },
-  disabledButton: {
-    backgroundColor: Palette.neutral.slate300,
-  },
+  disabledButton: {},
   primaryButtonText: {
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 14,
   },
   iconButton: {
-    padding: 10,
+    padding: 12,
     marginLeft: Spacing.two,
-    borderRadius: Radius.md,
-    backgroundColor: Palette.neutral.slate100,
+    borderRadius: Radius.full,
+    borderWidth: 1,
   },
   quickTestsContainer: {
-    marginTop: Spacing.three,
+    marginTop: Spacing.four,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Palette.risk.suspiciousBorder,
+    backgroundColor: Palette.risk.suspiciousLight,
+    padding: Spacing.three,
   },
   testLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: Palette.neutral.slate400,
-    letterSpacing: 0.8,
+    letterSpacing: 1.2,
     marginBottom: Spacing.two,
+    textTransform: 'uppercase',
   },
   simButton: {
     flexDirection: 'row',
@@ -312,6 +417,6 @@ const styles = StyleSheet.create({
   simButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: Palette.risk.dangerousDark,
-  }
+    color: Palette.risk.dangerous,
+  },
 });

@@ -1,15 +1,87 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { UsersThree, Plus, ThumbsUp, ShieldCheck, Clock, Warning, ShieldSlash } from 'phosphor-react-native';
+import { UsersThree, Plus, ThumbsUp, ShieldCheck, Clock, Warning } from 'phosphor-react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  Easing,
+} from 'react-native-reanimated';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { CommunityReport } from '@/types/security';
 import { getCommunityReports, upvoteReport } from '@/services/storageService';
 import { useAppMode } from '@/context/AppModeContext';
 import { ModeBadge } from '@/components/ui/mode-badge';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { useAppTheme } from '@/context/ThemeContext';
 import { ReportModal } from '@/components/ui/report-modal';
 
+function ReportCard({ item, index, onUpvote, colors, isDark }: { item: CommunityReport; index: number; onUpvote: (id: string) => void; colors: any; isDark: boolean }) {
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(16);
+
+  useEffect(() => {
+    opacity.value = withDelay(index * 70, withTiming(1, { duration: 400, easing: Easing.out(Easing.exp) }));
+    translateY.value = withDelay(index * 70, withTiming(0, { duration: 400, easing: Easing.out(Easing.exp) }));
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  const isVerified = item.status === 'VERIFIED';
+
+  return (
+    <Animated.View style={[styles.reportCard, animStyle, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+      <View style={styles.cardHeader}>
+        <View style={[styles.categoryBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]}>
+          <Text style={[styles.categoryBadgeText, { color: colors.textSecondary }]}>{item.category.replace('_', ' ')}</Text>
+        </View>
+        {isVerified ? (
+          <View style={styles.statusVerified}>
+            <ShieldCheck size={12} color={Palette.risk.safe} weight="bold" />
+            <Text style={styles.statusVerifiedText}>VERIFIED</Text>
+          </View>
+        ) : (
+          <View style={styles.statusPending}>
+            <Clock size={12} color={Palette.risk.suspicious} />
+            <Text style={styles.statusPendingText}>REVIEW</Text>
+          </View>
+        )}
+      </View>
+
+      <Text style={[styles.reportTitle, { color: colors.textPrimary }]}>{item.title}</Text>
+
+      {item.targetIdentifier && (
+        <View style={styles.identifierBox}>
+          <Warning size={13} color={Palette.risk.dangerous} weight="bold" />
+          <Text style={styles.identifierText} numberOfLines={1}>{item.targetIdentifier}</Text>
+        </View>
+      )}
+
+      {item.description ? (
+        <Text style={[styles.reportDesc, { color: colors.textSecondary }]}>{item.description}</Text>
+      ) : null}
+
+      <View style={styles.cardFooter}>
+        <Text style={[styles.timestampText, { color: colors.textMuted }]}>
+          {new Date(item.reportedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+        </Text>
+
+        <TouchableOpacity style={styles.upvoteButton} onPress={() => onUpvote(item.id)}>
+          <ThumbsUp size={13} color={Palette.brand.primaryLight} weight="bold" />
+          <Text style={styles.upvoteText}>{item.upvotes}</Text>
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
+  );
+}
+
 export default function CommunityFeedScreen() {
+  const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { isDemoMode } = useAppMode();
   const [reports, setReports] = useState<CommunityReport[]>([]);
@@ -36,85 +108,43 @@ export default function CommunityFeedScreen() {
     setReports(prev => [newReport, ...prev]);
   };
 
-  const renderItem = ({ item }: { item: CommunityReport }) => (
-    <View style={styles.reportCard}>
-      <View style={styles.cardHeader}>
-        <View style={styles.categoryBadge}>
-          <Text style={styles.categoryBadgeText}>{item.category.replace('_', ' ')}</Text>
-        </View>
-        <View style={styles.statusBadge}>
-          {item.status === 'VERIFIED' ? (
-            <View style={styles.statusVerified}>
-              <ShieldCheck size={14} color={Palette.risk.safeDark} weight="bold" />
-              <Text style={styles.statusVerifiedText}>VERIFIED THREAT</Text>
-            </View>
-          ) : (
-            <View style={styles.statusPending}>
-              <Clock size={14} color={Palette.risk.suspiciousDark} />
-              <Text style={styles.statusPendingText}>UNDER REVIEW</Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      <Text style={styles.reportTitle}>{item.title}</Text>
-      
-      {item.targetIdentifier && (
-        <View style={styles.identifierBox}>
-          <Warning size={14} color={Palette.risk.dangerous} weight="bold" />
-          <Text style={styles.identifierText} numberOfLines={1}>{item.targetIdentifier}</Text>
-        </View>
-      )}
-
-      {item.description ? (
-        <Text style={styles.reportDesc}>{item.description}</Text>
-      ) : null}
-
-      <View style={styles.cardFooter}>
-        <Text style={styles.timestampText}>
-          {new Date(item.reportedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-        </Text>
-        
-        <TouchableOpacity style={styles.upvoteButton} onPress={() => handleUpvote(item.id)}>
-          <ThumbsUp size={14} color={Palette.brand.primary} weight="bold" />
-          <Text style={styles.upvoteText}>{item.upvotes} Confirmations</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.topBar}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.base }]}>
+      <View style={[styles.topBar, { backgroundColor: colors.elevated, borderBottomColor: colors.divider }]}>
         <View style={styles.topRow}>
           <View style={styles.titleRow}>
-            <UsersThree size={22} color={Palette.brand.primary} weight="bold" />
-            <Text style={styles.heading}>Community Intel Feed</Text>
+            <UsersThree size={20} color={Palette.brand.primaryLight} weight="bold" />
+            <Text style={[styles.heading, { color: colors.textPrimary }]}>Community Intel</Text>
           </View>
-          <ModeBadge />
+          <View style={styles.topRowRight}>
+            <ModeBadge />
+            <ThemeToggle />
+            <TouchableOpacity style={styles.reportBtn} onPress={() => setIsModalOpen(true)}>
+              <Plus size={14} color="#FFFFFF" weight="bold" />
+              <Text style={styles.reportBtnText}>Report</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        <View style={styles.subtitleRow}>
-          <Text style={styles.subheading}>
-            {isDemoMode 
-              ? 'Crowdsourced verified scam alerts & seed threats' 
-              : 'Live decentralized community threat feed'}
-          </Text>
-          <TouchableOpacity style={styles.reportBtn} onPress={() => setIsModalOpen(true)}>
-            <Plus size={14} color="#FFFFFF" weight="bold" />
-            <Text style={styles.reportBtnText}>Report Scam</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={[styles.subheading, { color: colors.textSecondary }]}>
+          {isDemoMode
+            ? 'Crowdsourced verified scam alerts & seed threats'
+            : 'Live decentralized community threat feed'}
+        </Text>
       </View>
 
       {reports.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <UsersThree size={44} color={Palette.neutral.slate300} />
-          <Text style={styles.emptyTitle}>No Community Reports Yet</Text>
-          <Text style={styles.emptySubtext}>
-            In Live Mode, all pre-seeded dummy reports are hidden. Be the first to report an active threat!
+          <View style={[styles.emptyIconWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderColor: colors.cardBorder }]}>
+            <UsersThree size={36} color={Palette.text.muted} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>No Reports Yet</Text>
+          <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>
+            {isDemoMode
+              ? 'No demo threats loaded. Reports will appear here.'
+              : 'Live mode: all pre-seeded dummy reports are hidden. Be the first to flag an active threat.'}
           </Text>
           <TouchableOpacity style={styles.emptyReportBtn} onPress={() => setIsModalOpen(true)}>
-            <Plus size={16} color="#FFFFFF" weight="bold" />
+            <Plus size={15} color="#FFFFFF" weight="bold" />
             <Text style={styles.emptyReportBtnText}>Submit First Report</Text>
           </TouchableOpacity>
         </View>
@@ -122,9 +152,11 @@ export default function CommunityFeedScreen() {
         <FlatList
           data={reports}
           keyExtractor={(item) => item.id}
-          renderItem={renderItem}
+          renderItem={({ item, index }) => (
+            <ReportCard item={item} index={index} onUpvote={handleUpvote} colors={colors} isDark={isDark} />
+          )}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 90 }]}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchReports} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchReports} tintColor={Palette.brand.primaryLight} />}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -141,42 +173,41 @@ export default function CommunityFeedScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Palette.neutral.slate50,
+    backgroundColor: Palette.surface.base,
   },
   topBar: {
     paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
-    backgroundColor: '#FFFFFF',
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.three,
+    backgroundColor: Palette.surface.elevated,
     borderBottomWidth: 1,
-    borderBottomColor: Palette.neutral.slate200,
+    borderBottomColor: Palette.surface.divider,
   },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.one,
+    marginBottom: 6,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.one,
+    gap: 8,
+  },
+  topRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
   heading: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
-    color: Palette.neutral.slate900,
-    letterSpacing: -0.3,
-  },
-  subtitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    color: Palette.text.primary,
+    letterSpacing: -0.4,
   },
   subheading: {
     fontSize: 11,
-    color: Palette.neutral.slate500,
-    flex: 1,
-    marginRight: Spacing.two,
+    color: Palette.text.secondary,
   },
   reportBtn: {
     flexDirection: 'row',
@@ -184,7 +215,7 @@ const styles = StyleSheet.create({
     gap: 4,
     backgroundColor: Palette.brand.primary,
     paddingVertical: 6,
-    paddingHorizontal: Spacing.two,
+    paddingHorizontal: 12,
     borderRadius: Radius.full,
   },
   reportBtnText: {
@@ -193,15 +224,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   listContent: {
-    padding: Spacing.four,
+    padding: Spacing.three,
+    gap: Spacing.two,
   },
   reportCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Palette.surface.card,
     borderRadius: Radius.lg,
-    padding: Spacing.four,
+    padding: Spacing.three,
     borderWidth: 1,
-    borderColor: Palette.neutral.slate200,
-    marginBottom: Spacing.three,
+    borderColor: Palette.surface.cardBorder,
+    marginBottom: Spacing.two,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -210,72 +242,82 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.two,
   },
   categoryBadge: {
-    backgroundColor: Palette.neutral.slate100,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   categoryBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: Palette.neutral.slate600,
-    letterSpacing: 0.5,
+    color: Palette.text.secondary,
+    letterSpacing: 0.6,
   },
-  statusBadge: {},
   statusVerified: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Palette.risk.safeLight,
+    backgroundColor: 'rgba(34,211,238,0.1)',
     paddingVertical: 3,
-    paddingHorizontal: 6,
+    paddingHorizontal: 7,
     borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(34,211,238,0.25)',
   },
   statusVerifiedText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: Palette.risk.safeDark,
+    fontWeight: '800',
+    color: Palette.risk.safe,
+    letterSpacing: 0.5,
   },
   statusPending: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Palette.risk.suspiciousLight,
+    backgroundColor: 'rgba(251,191,36,0.1)',
     paddingVertical: 3,
-    paddingHorizontal: 6,
+    paddingHorizontal: 7,
     borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.25)',
   },
   statusPendingText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: Palette.risk.suspiciousDark,
+    fontWeight: '800',
+    color: Palette.risk.suspicious,
+    letterSpacing: 0.5,
   },
   reportTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: Palette.neutral.slate900,
-    marginBottom: Spacing.one,
+    color: Palette.text.primary,
+    marginBottom: Spacing.two,
+    lineHeight: 20,
   },
   identifierBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Palette.risk.dangerousLight,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(248,113,113,0.08)',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
     borderRadius: Radius.sm,
     marginBottom: Spacing.two,
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.2)',
   },
   identifierText: {
     fontSize: 11,
     fontFamily: 'monospace',
     fontWeight: '600',
-    color: Palette.risk.dangerousDark,
+    color: Palette.risk.dangerous,
     flex: 1,
   },
   reportDesc: {
     fontSize: 12,
-    color: Palette.neutral.slate600,
+    color: Palette.text.secondary,
     lineHeight: 18,
     marginBottom: Spacing.two,
   },
@@ -284,45 +326,57 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: Palette.neutral.slate100,
+    borderTopColor: Palette.surface.divider,
     paddingTop: Spacing.two,
     marginTop: Spacing.one,
   },
   timestampText: {
     fontSize: 11,
-    color: Palette.neutral.slate400,
+    color: Palette.text.muted,
   },
   upvoteButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: Palette.brand.primaryMuted,
+    gap: 5,
+    backgroundColor: 'rgba(59,130,246,0.1)',
     paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.25)',
   },
   upvoteText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: Palette.brand.primaryDark,
+    fontWeight: '700',
+    color: Palette.brand.primaryLight,
   },
   emptyContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: Spacing.six,
-    marginTop: Spacing.six,
+  },
+  emptyIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Palette.surface.cardBorder,
+    marginBottom: Spacing.three,
   },
   emptyTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: Palette.neutral.slate700,
-    marginTop: Spacing.three,
+    color: Palette.text.secondary,
+    marginBottom: Spacing.two,
   },
   emptySubtext: {
     fontSize: 12,
-    color: Palette.neutral.slate400,
+    color: Palette.text.muted,
     textAlign: 'center',
-    marginTop: Spacing.one,
     marginBottom: Spacing.four,
     lineHeight: 18,
   },
@@ -331,7 +385,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.one,
     backgroundColor: Palette.brand.primary,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: Spacing.four,
     borderRadius: Radius.md,
   },
@@ -339,5 +393,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#FFFFFF',
-  }
+  },
 });
