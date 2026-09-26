@@ -1,30 +1,8 @@
-import * as Notifications from 'expo-notifications';
 import * as Clipboard from 'expo-clipboard';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { analyzeMessage } from '@/services/riskEngine';
 import { saveAnalysisResult } from '@/services/storageService';
 import { AnalysisResult } from '@/types/security';
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
-
-export async function requestNotificationPermissions(): Promise<boolean> {
-  if (Platform.OS === 'web') return false;
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-  return finalStatus === 'granted';
-}
 
 export async function checkClipboardForThreats(lastProcessedText: string): Promise<{ result: AnalysisResult; text: string } | null> {
   try {
@@ -41,7 +19,7 @@ export async function checkClipboardForThreats(lastProcessedText: string): Promi
     const result = analyzeMessage(cleanText);
     if (result.overallRisk === 'DANGEROUS' || result.overallRisk === 'SUSPICIOUS') {
       await saveAnalysisResult(result);
-      await triggerThreatNotification(result, cleanText);
+      triggerThreatAlert(result, cleanText);
       return { result, text: cleanText };
     }
     return null;
@@ -50,34 +28,25 @@ export async function checkClipboardForThreats(lastProcessedText: string): Promi
   }
 }
 
-export async function triggerThreatNotification(result: AnalysisResult, rawText: string) {
-  if (Platform.OS === 'web') return;
-  
+export function triggerThreatAlert(result: AnalysisResult, rawText: string) {
   const title = result.overallRisk === 'DANGEROUS' 
     ? 'ScamShield Alert: High Threat Detected' 
     : 'ScamShield Notice: Suspicious Content';
 
   const body = result.signals.length > 0 
-    ? `${result.signals[0].title}: ${result.signals[0].description.slice(0, 80)}...`
+    ? `${result.signals[0].title}: ${result.signals[0].description}`
     : 'Copied message contains unverified or potentially deceptive patterns.';
 
-  try {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        data: { scanId: result.id, rawText },
-      },
-      trigger: null,
-    });
-  } catch {
-    // Graceful fallback
-  }
+  Alert.alert(
+    title,
+    body,
+    [{ text: 'Inspect Evidence', style: 'default' }]
+  );
 }
 
 export async function simulateIncomingNotificationScan(mockSender: string, messageBody: string): Promise<AnalysisResult> {
   const result = analyzeMessage(messageBody);
   await saveAnalysisResult(result);
-  await triggerThreatNotification(result, messageBody);
+  triggerThreatAlert(result, messageBody);
   return result;
 }

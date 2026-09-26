@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Switch, AppState, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Shield, Sparkle, Trash, ClipboardText, Translate, BellRinging, Lightning, ToggleLeft, ToggleRight } from 'phosphor-react-native';
+import { Shield, Sparkle, Trash, ClipboardText, Translate, BellRinging, Lightning } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { analyzeMessage } from '@/services/riskEngine';
 import { saveAnalysisResult } from '@/services/storageService';
-import { checkClipboardForThreats, requestNotificationPermissions, simulateIncomingNotificationScan } from '@/services/autoProtection';
+import { checkClipboardForThreats, simulateIncomingNotificationScan } from '@/services/autoProtection';
 import { useAppMode } from '@/context/AppModeContext';
+import { ModeBadge } from '@/components/ui/mode-badge';
 import { AnalysisResult } from '@/types/security';
 import { EvidenceCard } from '@/components/ui/evidence-card';
 
@@ -16,15 +17,13 @@ const SAMPLE_SAFE_SMS = 'Your HDFC Bank account credit card ending in 4021 was c
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { isDemoMode, toggleDemoMode } = useAppMode();
+  const { isDemoMode } = useAppMode();
   const [inputText, setInputText] = useState('');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [isAutoProtectionActive, setIsAutoProtectionActive] = useState(true);
   const lastProcessedText = useRef('');
 
   useEffect(() => {
-    requestNotificationPermissions();
-
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (nextAppState === 'active' && isAutoProtectionActive) {
         const detected = await checkClipboardForThreats(lastProcessedText.current);
@@ -64,11 +63,6 @@ export default function HomeScreen() {
     setInputText(simulatedText);
     const res = await simulateIncomingNotificationScan('VM-SBINB', simulatedText);
     setAnalysisResult(res);
-    Alert.alert(
-      'Automated Threat Detected',
-      'An incoming smishing pattern from "VM-SBINB" was intercepted and categorized as DANGEROUS.',
-      [{ text: 'Inspect Evidence', style: 'default' }]
-    );
   };
 
   return (
@@ -85,20 +79,12 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <View style={styles.logoRow}>
+          <View style={styles.topRow}>
             <View style={styles.titleGroup}>
               <Shield size={24} color={Palette.brand.primary} weight="fill" />
               <Text style={styles.appTitle}>ScamShield</Text>
             </View>
-
-            <TouchableOpacity 
-              style={[styles.modeToggle, isDemoMode ? styles.modeDemo : styles.modeLive]} 
-              onPress={toggleDemoMode}
-            >
-              <Text style={[styles.modeToggleText, isDemoMode ? styles.modeDemoText : styles.modeLiveText]}>
-                {isDemoMode ? 'DEMO MODE' : 'LIVE MODE'}
-              </Text>
-            </TouchableOpacity>
+            <ModeBadge />
           </View>
           <Text style={styles.appSubtitle}>
             {isDemoMode 
@@ -215,7 +201,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.three,
     marginTop: Spacing.two,
   },
-  logoRow: {
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -230,31 +216,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Palette.neutral.slate900,
     letterSpacing: -0.5,
-  },
-  modeToggle: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-  },
-  modeDemo: {
-    backgroundColor: Palette.brand.primaryMuted,
-    borderColor: Palette.brand.primary,
-  },
-  modeLive: {
-    backgroundColor: Palette.risk.safeLight,
-    borderColor: Palette.risk.safe,
-  },
-  modeToggleText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-  },
-  modeDemoText: {
-    color: Palette.brand.primaryDark,
-  },
-  modeLiveText: {
-    color: Palette.risk.safeDark,
   },
   appSubtitle: {
     fontSize: 12,
