@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,592 +9,461 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withRepeat,
-  withSequence,
-  withSpring,
-  Easing,
-  FadeIn,
-} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  Globe,
-  ShieldCheck,
-  Warning,
-  WarningOctagon,
-  Sparkle,
-  Key,
-} from 'phosphor-react-native';
+import { Globe, ArrowRight, Warning, Key } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { scanUrlWithVirusTotal, UrlScanResult } from '@/services/urlIntelligence';
+import { saveAnalysisResult } from '@/services/storageService';
 import { useAppMode } from '@/context/AppModeContext';
-import { ModeBadge } from '@/components/ui/mode-badge';
-import { RiskBadge } from '@/components/ui/risk-badge';
 import { useAppTheme } from '@/context/ThemeContext';
+import { ModeBadge } from '@/components/ui/mode-badge';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { RiskBadge } from '@/components/ui/risk-badge';
 
-// ---------------------------------------------------------------------------
-// Animated stat number — fades in with a small delay
-// ---------------------------------------------------------------------------
-interface AnimatedStatProps {
-  value: number;
-  color: string;
-}
+const DEMO_TARGETS = [
+  { label: 'Fake SBI Phish', url: 'http://sbi-kyc-verify.top/login' },
+  { label: 'Electricity Threat', url: 'http://bijli-bill-update.xyz/pay' },
+  { label: 'Official Portal', url: 'https://onlinesbi.sbi' },
+];
 
-function AnimatedStat({ value, color }: AnimatedStatProps) {
-  const opacity = useSharedValue(0);
-
-  useEffect(() => {
-    opacity.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.quad) });
-  }, [value, opacity]);
-
-  const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
-
-  return (
-    <Animated.Text style={[styles.statNumber, { color }, animStyle]}>
-      {value}
-    </Animated.Text>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Main screen
-// ---------------------------------------------------------------------------
 export default function UrlScannerScreen() {
   const insets = useSafeAreaInsets();
   const { isDemoMode, virusTotalApiKey, setVirusTotalApiKey } = useAppMode();
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
 
   const [urlInput, setUrlInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<UrlScanResult | null>(null);
   const [showKeyConfig, setShowKeyConfig] = useState(false);
-  const [tempKey, setTempKey] = useState(virusTotalApiKey);
+  const [tempKey, setTempKey] = useState(virusTotalApiKey || '');
 
-  // Screen mount fade-in
-  const screenOpacity = useSharedValue(0);
   useEffect(() => {
-    screenOpacity.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.quad) });
-  }, [screenOpacity]);
-  const screenAnimStyle = useAnimatedStyle(() => ({ opacity: screenOpacity.value }));
+    setTempKey(virusTotalApiKey || '');
+  }, [virusTotalApiKey]);
 
-  // Scan button pulse when loading
-  const pulseScale = useSharedValue(1);
-  useEffect(() => {
-    if (loading) {
-      pulseScale.value = withRepeat(
-        withSequence(
-          withTiming(1.15, { duration: 600, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) }),
-        ),
-        -1,
-        false,
-      );
-    } else {
-      pulseScale.value = withTiming(1, { duration: 200 });
-    }
-  }, [loading, pulseScale]);
-  const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulseScale.value }] }));
+  const handleScan = async (overrideUrl?: string) => {
+    const target = overrideUrl !== undefined ? overrideUrl : urlInput;
+    if (!target.trim()) return;
 
-  // Result card slide-up
-  const resultTranslateY = useSharedValue(24);
-  const resultOpacity = useSharedValue(0);
-  useEffect(() => {
-    if (result) {
-      resultTranslateY.value = withSpring(0, { damping: 18, stiffness: 180 });
-      resultOpacity.value = withTiming(1, { duration: 350 });
-    } else {
-      resultTranslateY.value = 24;
-      resultOpacity.value = 0;
-    }
-  }, [result, resultTranslateY, resultOpacity]);
-  const resultAnimStyle = useAnimatedStyle(() => ({
-    opacity: resultOpacity.value,
-    transform: [{ translateY: resultTranslateY.value }],
-  }));
-
-  // ----- Logic (unchanged) -----
-  const handleScan = useCallback(async (targetUrl?: string) => {
-    const url = (targetUrl !== undefined ? targetUrl : urlInput).trim();
-    if (!url) return;
     setLoading(true);
-    const res = await scanUrlWithVirusTotal(url, virusTotalApiKey);
-    setResult(res);
-    setLoading(false);
-  }, [urlInput, virusTotalApiKey]);
+    try {
+      const scanRes = await scanUrlWithVirusTotal(target.trim(), virusTotalApiKey);
+      setResult(scanRes);
+      
+      // Save record in analysis history format
+      await saveAnalysisResult({
+        id: `url-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        overallRisk: scanRes.overallRisk,
+        riskScore: scanRes.riskScore,
+        confidence: 0.95,
+        summary: `VirusTotal engine scanned ${scanRes.domain}: ${scanRes.maliciousCount} engines flagged malicious, ${scanRes.suspiciousCount} flagged suspicious.`,
+        signals: scanRes.signals,
+        actions: [
+          {
+            id: 'act-1',
+            title: scanRes.overallRisk === 'DANGEROUS' ? 'Block & Avoid Access' : 'Proceed with caution',
+            description: 'Domain flagged with potential security vulnerabilities or phishing associations.',
+            priority: scanRes.overallRisk === 'DANGEROUS' ? 'CRITICAL' : 'RECOMMENDED',
+            actionType: scanRes.overallRisk === 'DANGEROUS' ? 'BLOCK' : 'VERIFY_OFFICIAL',
+          }
+        ],
+        inputPayload: {
+          rawContent: target.trim(),
+          type: 'URL'
+        }
+      });
+    } catch {
+      Alert.alert('Scan Failed', 'Could not complete reputation audit for this domain.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSaveKey = async () => {
     await setVirusTotalApiKey(tempKey);
     setShowKeyConfig(false);
   };
 
-  // ----- Derived risk colour for result top bar -----
-  const riskBarColor =
-    result?.overallRisk === 'DANGEROUS'
-      ? Palette.risk.dangerous
-      : result?.overallRisk === 'SUSPICIOUS'
-      ? Palette.risk.suspicious
-      : Palette.risk.safe;
-
   return (
-    <Animated.View style={[styles.rootContainer, { backgroundColor: colors.base, paddingTop: insets.top }, screenAnimStyle]}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <KeyboardAvoidingView
+      style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.base }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* ---- Header ---- */}
-          <View style={styles.header}>
-            <View style={styles.topRow}>
-              <View>
-                <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>URL Inspector</Text>
-                <Text style={[styles.screenSubtitle, { color: colors.textMuted }]}>VirusTotal multi-engine scan</Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <ThemeToggle />
-                <ModeBadge />
-              </View>
+        {/* Top Header */}
+        <View style={[styles.header, { borderBottomColor: colors.divider }]}>
+          <View style={styles.topRow}>
+            <View style={styles.brandGroup}>
+              <Globe size={22} color={colors.textPrimary} weight="fill" />
+              <Text style={[styles.brandTitle, { color: colors.textPrimary }]}>URL Intelligence</Text>
+            </View>
+            <View style={styles.headerRight}>
+              <ThemeToggle />
+              <ModeBadge />
             </View>
           </View>
+          <Text style={[styles.tagline, { color: colors.textMuted }]}>
+            Multi-engine domain reputation & typo-squatting scanner
+          </Text>
+        </View>
 
-          {/* ---- Scan card ---- */}
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-            {/* Top row: label + API config pill */}
-            <View style={styles.inputHeader}>
-              <Text style={[styles.inputLabel, { color: colors.textMuted }]}>TARGET URL</Text>
-              <TouchableOpacity
-                style={[
-                  styles.keyToggleBtn,
-                  { borderColor: colors.cardBorder },
-                  virusTotalApiKey ? styles.keyToggleBtnActive : null,
-                ]}
-                onPress={() => setShowKeyConfig(!showKeyConfig)}
-              >
-                <Key
-                  size={12}
-                  color={virusTotalApiKey ? Palette.risk.safeDark : colors.textMuted}
-                />
-                <Text
-                  style={[
-                    styles.keyToggleText,
-                    { color: colors.textMuted },
-                    virusTotalApiKey ? styles.keyToggleTextActive : null,
-                  ]}
-                >
-                  {virusTotalApiKey ? 'VT API Configured' : 'Configure VT API'}
-                </Text>
+        {/* Input Panel */}
+        <View style={[styles.inputPanel, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <View style={styles.panelTop}>
+            <Text style={[styles.panelLabel, { color: colors.textMuted }]}>TARGET URL / DOMAIN</Text>
+            <TouchableOpacity
+              style={[
+                styles.configPill,
+                {
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                  borderColor: colors.cardBorder,
+                },
+              ]}
+              onPress={() => setShowKeyConfig(!showKeyConfig)}
+            >
+              <Key size={12} color={colors.textSecondary} weight="bold" />
+              <Text style={[styles.configPillText, { color: colors.textSecondary }]}>
+                {virusTotalApiKey ? 'VT API Active' : 'Configure API'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {showKeyConfig && (
+            <View style={[styles.keyDrawer, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}>
+              <Text style={[styles.keyTitle, { color: colors.textPrimary }]}>VirusTotal API Key</Text>
+              <TextInput
+                style={[styles.keyInput, { backgroundColor: colors.card, borderColor: colors.cardBorder, color: colors.textPrimary }]}
+                placeholder="Enter 64-char API key..."
+                placeholderTextColor={colors.textMuted}
+                value={tempKey}
+                onChangeText={setTempKey}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity style={styles.saveKeyBtn} onPress={handleSaveKey}>
+                <Text style={styles.saveKeyText}>Save Key</Text>
               </TouchableOpacity>
             </View>
+          )}
 
-            {/* API key config panel */}
-            {showKeyConfig && (
-              <View style={[styles.apiKeyBox, { backgroundColor: colors.inputBg, borderColor: colors.cardBorder }]}>
-                <Text style={[styles.apiKeyHelp, { color: colors.textMuted }]}>
-                  Optional: Enter a free VirusTotal API key to enable live cloud engine queries.
-                </Text>
-                <TextInput
-                  style={[styles.keyInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
-                  placeholder="Paste VirusTotal API key..."
-                  placeholderTextColor={colors.textMuted}
-                  value={tempKey}
-                  onChangeText={setTempKey}
-                  autoCapitalize="none"
-                />
-                <TouchableOpacity style={styles.saveKeyBtn} onPress={handleSaveKey}>
-                  <Text style={styles.saveKeyBtnText}>Save Key</Text>
+          <TextInput
+            style={[
+              styles.urlInput,
+              {
+                backgroundColor: colors.inputBg,
+                borderColor: colors.inputBorder,
+                color: colors.textPrimary,
+              },
+            ]}
+            placeholder="e.g. http://sbi-kyc-verify.top or https://example.com"
+            placeholderTextColor={colors.textMuted}
+            value={urlInput}
+            onChangeText={setUrlInput}
+            autoCapitalize="none"
+            keyboardType="url"
+          />
+
+          <TouchableOpacity
+            style={[styles.scanBtn, { backgroundColor: Palette.brand.primary }, !urlInput.trim() && styles.btnDisabled]}
+            onPress={() => handleScan()}
+            disabled={!urlInput.trim() || loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Text style={styles.scanBtnText}>Audit URL Reputation</Text>
+                <ArrowRight size={14} color="#FFFFFF" weight="bold" />
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Demo Targets */}
+        {isDemoMode && (
+          <View style={styles.sandboxSection}>
+            <Text style={[styles.sandboxLabel, { color: colors.textMuted }]}>PRELOADED DOMAIN VECTORS</Text>
+            <View style={styles.chipsRow}>
+              {DEMO_TARGETS.map((t, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={[styles.targetChip, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+                  onPress={() => {
+                    setUrlInput(t.url);
+                    handleScan(t.url);
+                  }}
+                >
+                  <Text style={[styles.targetChipText, { color: colors.textSecondary }]}>{t.label}</Text>
                 </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Result Breakdown */}
+        {result && (
+          <View style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <View style={[styles.resultHeader, { borderBottomColor: colors.divider }]}>
+              <View style={styles.resultHeaderLeft}>
+                <Text style={[styles.resultKicker, { color: colors.textMuted }]}>AUDIT VERDICT</Text>
+                <Text style={[styles.targetUrlText, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {result.url}
+                </Text>
+              </View>
+              <RiskBadge level={result.overallRisk} score={result.riskScore} size="md" />
+            </View>
+
+            {/* Reputation Engines Breakdown */}
+            <View style={styles.metricsRow}>
+              <View style={[styles.metricTile, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)', borderColor: colors.cardBorder }]}>
+                <Text style={[styles.metricVal, { color: '#DC2626' }]}>{result.maliciousCount}</Text>
+                <Text style={[styles.metricSub, { color: colors.textMuted }]}>Malicious</Text>
+              </View>
+
+              <View style={[styles.metricTile, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)', borderColor: colors.cardBorder }]}>
+                <Text style={[styles.metricVal, { color: '#D97706' }]}>{result.suspiciousCount}</Text>
+                <Text style={[styles.metricSub, { color: colors.textMuted }]}>Suspicious</Text>
+              </View>
+
+              <View style={[styles.metricTile, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)', borderColor: colors.cardBorder }]}>
+                <Text style={[styles.metricVal, { color: '#059669' }]}>{result.harmlessCount}</Text>
+                <Text style={[styles.metricSub, { color: colors.textMuted }]}>Clean</Text>
+              </View>
+            </View>
+
+            {result.signals.length > 0 && (
+              <View style={styles.signalsWrap}>
+                <Text style={[styles.signalsHeader, { color: colors.textMuted }]}>DETECTED THREAT SIGNALS</Text>
+                {result.signals.map((s, idx) => (
+                  <View key={idx} style={styles.signalLine}>
+                    <Warning size={13} color="#DC2626" weight="bold" />
+                    <Text style={[styles.signalLineText, { color: colors.textSecondary }]}>
+                      {s.title}: {s.description}
+                    </Text>
+                  </View>
+                ))}
               </View>
             )}
-
-            {/* URL input */}
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
-              placeholder="e.g. sbi-kyc-verify.top or https://example.com"
-              placeholderTextColor={colors.textMuted}
-              value={urlInput}
-              onChangeText={setUrlInput}
-              autoCapitalize="none"
-            />
-
-            {/* Scan button with pulse wrap */}
-            <Animated.View style={pulseStyle}>
-              <TouchableOpacity
-                style={[
-                  styles.primaryButton,
-                  (!urlInput.trim() || loading) && styles.disabledButton,
-                ]}
-                onPress={() => handleScan()}
-                disabled={!urlInput.trim() || loading}
-                activeOpacity={0.85}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <>
-                    <Sparkle size={18} color="#FFFFFF" weight="bold" />
-                    <Text style={styles.primaryButtonText}>Scan URL Reputation</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </Animated.View>
           </View>
-
-          {/* ---- Demo benchmark chips ---- */}
-          {isDemoMode && (
-            <View style={styles.benchmarks}>
-              <Text style={[styles.benchLabel, { color: colors.textMuted }]}>DEMO BENCHMARK TARGETS</Text>
-              <View style={styles.benchRow}>
-                <TouchableOpacity
-                  style={[styles.benchBtn, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-                  onPress={() => {
-                    setUrlInput('http://sbi-kyc-verify.top/login');
-                    handleScan('http://sbi-kyc-verify.top/login');
-                  }}
-                >
-                  <WarningOctagon size={13} color={Palette.risk.dangerous} />
-                  <Text style={[styles.benchBtnText, { color: colors.textSecondary }]}>Fake SBI Phish</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.benchBtn, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-                  onPress={() => {
-                    setUrlInput('https://hdfcbank.com');
-                    handleScan('https://hdfcbank.com');
-                  }}
-                >
-                  <ShieldCheck size={13} color={Palette.risk.safe} />
-                  <Text style={[styles.benchBtnText, { color: colors.textSecondary }]}>Official Bank Site</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* ---- Result card ---- */}
-          {result && (
-            <Animated.View style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }, resultAnimStyle]}>
-              {/* Colored top bar */}
-              <View style={[styles.resultTopBar, { backgroundColor: riskBarColor }]} />
-
-              {/* Header row */}
-              <View style={styles.resultHeader}>
-                <View style={styles.resultHeaderLeft}>
-                  <Text style={[styles.domainTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {result.domain}
-                  </Text>
-                  <Text style={[styles.sourceTag, { color: colors.textMuted }]}>Engine: {result.source}</Text>
-                </View>
-                <RiskBadge level={result.overallRisk} score={result.riskScore} size="md" />
-              </View>
-
-              {/* 3-column stats */}
-              <View style={styles.statsGrid}>
-                <View style={[styles.statBox, styles.statBoxDanger]}>
-                  <AnimatedStat value={result.maliciousCount} color={Palette.risk.dangerous} />
-                  <Text style={[styles.statLabel, { color: colors.textMuted }]}>Malicious</Text>
-                </View>
-                <View style={[styles.statBox, styles.statBoxWarn]}>
-                  <AnimatedStat value={result.suspiciousCount} color={Palette.risk.suspicious} />
-                  <Text style={[styles.statLabel, { color: colors.textMuted }]}>Suspicious</Text>
-                </View>
-                <View style={[styles.statBox, styles.statBoxSafe]}>
-                  <AnimatedStat value={result.harmlessCount} color={Palette.risk.safe} />
-                  <Text style={[styles.statLabel, { color: colors.textMuted }]}>Clean</Text>
-                </View>
-              </View>
-
-              {/* Security signals */}
-              {result.signals.length > 0 && (
-                <View style={[styles.signalsSection, { borderTopColor: colors.cardBorder }]}>
-                  <Text style={[styles.signalsHeading, { color: colors.textMuted }]}>SECURITY SIGNALS</Text>
-                  {result.signals.map((s) => (
-                    <View key={s.id} style={styles.signalRow}>
-                      <Warning size={16} color={Palette.risk.dangerous} weight="bold" />
-                      <View style={styles.signalTextContainer}>
-                        <Text style={[styles.signalTitle, { color: colors.textPrimary }]}>{s.title}</Text>
-                        <Text style={[styles.signalDesc, { color: colors.textSecondary }]}>{s.description}</Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </Animated.View>
-          )}
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </Animated.View>
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  rootContainer: {
+  container: {
     flex: 1,
   },
   scrollContent: {
     padding: Spacing.four,
+    gap: Spacing.four,
   },
-
-  // --- Header ---
   header: {
-    marginBottom: Spacing.three,
-    marginTop: Spacing.two,
+    paddingBottom: Spacing.three,
+    borderBottomWidth: 1,
+    gap: 4,
   },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
-  screenTitle: {
-    fontSize: 26,
+  brandGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  brandTitle: {
+    fontSize: 18,
     fontWeight: '800',
-    letterSpacing: -0.6,
+    letterSpacing: -0.3,
   },
-  screenSubtitle: {
-    fontSize: 13,
-    marginTop: 3,
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-
-  // --- Scan card ---
-  card: {
-    borderRadius: Radius.lg,
+  tagline: {
+    fontSize: 12,
+  },
+  inputPanel: {
     padding: Spacing.four,
+    borderRadius: Radius.lg,
     borderWidth: 1,
+    gap: Spacing.three,
   },
-  inputHeader: {
+  panelTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.two,
   },
-  inputLabel: {
+  panelLabel: {
     fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.2,
+    fontWeight: '800',
+    letterSpacing: 0.8,
   },
-  keyToggleBtn: {
+  configPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    borderWidth: 1,
     paddingVertical: 4,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     borderRadius: Radius.full,
+    borderWidth: 1,
   },
-  keyToggleBtnActive: {
-    borderColor: Palette.risk.safeBorder,
-  },
-  keyToggleText: {
+  configPillText: {
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  keyToggleTextActive: {
-    color: Palette.risk.safeDark,
-  },
-
-  // --- API key config panel ---
-  apiKeyBox: {
+  keyDrawer: {
     padding: Spacing.three,
     borderRadius: Radius.md,
     borderWidth: 1,
-    marginBottom: Spacing.two,
+    gap: Spacing.two,
   },
-  apiKeyHelp: {
+  keyTitle: {
     fontSize: 11,
-    marginBottom: 8,
-    lineHeight: 16,
+    fontWeight: '700',
   },
   keyInput: {
-    borderWidth: 1,
+    height: 38,
     borderRadius: Radius.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.two,
     fontSize: 12,
-    marginBottom: 8,
   },
   saveKeyBtn: {
-    backgroundColor: Palette.brand.primaryDark,
-    paddingVertical: 6,
+    backgroundColor: Palette.brand.primary,
+    alignSelf: 'flex-start',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
     borderRadius: Radius.sm,
-    alignItems: 'center',
   },
-  saveKeyBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
+  saveKeyText: {
     color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
   },
-
-  // --- URL input ---
-  input: {
+  urlInput: {
+    height: 46,
     borderRadius: Radius.md,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: 12,
-    fontSize: 14,
     borderWidth: 1,
-    marginBottom: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    fontSize: 13,
   },
-
-  // --- Primary / scan button ---
-  primaryButton: {
+  scanBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Palette.brand.primaryDark,
-    paddingVertical: 14,
+    gap: 6,
+    paddingVertical: 12,
     borderRadius: Radius.md,
-    gap: Spacing.two,
   },
-  disabledButton: {
-    backgroundColor: Palette.neutral.slate700,
-    opacity: 0.6,
-  },
-  primaryButtonText: {
+  scanBtnText: {
     color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '700',
-    fontSize: 15,
-    letterSpacing: 0.2,
   },
-
-  // --- Demo benchmark chips ---
-  benchmarks: {
-    marginTop: Spacing.three,
+  btnDisabled: {
+    opacity: 0.4,
   },
-  benchLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.1,
-    marginBottom: Spacing.two,
-  },
-  benchRow: {
-    flexDirection: 'row',
+  sandboxSection: {
     gap: Spacing.two,
   },
-  benchBtn: {
+  sandboxLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  chipsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 7,
-    paddingHorizontal: Spacing.three,
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  targetChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: Radius.full,
     borderWidth: 1,
   },
-  benchBtnText: {
+  targetChipText: {
     fontSize: 11,
     fontWeight: '600',
   },
-
-  // --- Result card ---
   resultCard: {
     borderRadius: Radius.lg,
     borderWidth: 1,
-    marginTop: Spacing.three,
     overflow: 'hidden',
-  },
-  resultTopBar: {
-    height: 4,
-    width: '100%',
   },
   resultHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: Spacing.four,
-    paddingBottom: Spacing.three,
+    borderBottomWidth: 1,
   },
   resultHeaderLeft: {
     flex: 1,
-    marginRight: Spacing.two,
+    marginRight: Spacing.three,
+    gap: 2,
   },
-  domainTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  sourceTag: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-
-  // --- Stats grid ---
-  statsGrid: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-    paddingHorizontal: Spacing.four,
-    paddingBottom: Spacing.three,
-  },
-  statBox: {
-    flex: 1,
-    paddingVertical: Spacing.two + 4,
-    paddingHorizontal: Spacing.two,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    borderLeftWidth: 3,
-  },
-  statBoxDanger: {
-    backgroundColor: Palette.risk.dangerousLight,
-    borderLeftColor: Palette.risk.dangerous,
-  },
-  statBoxWarn: {
-    backgroundColor: Palette.risk.suspiciousLight,
-    borderLeftColor: Palette.risk.suspicious,
-  },
-  statBoxSafe: {
-    backgroundColor: Palette.risk.safeLight,
-    borderLeftColor: Palette.risk.safe,
-  },
-  statNumber: {
-    fontSize: 22,
+  resultKicker: {
+    fontSize: 10,
     fontWeight: '800',
-    letterSpacing: -0.5,
+    letterSpacing: 0.8,
   },
-  statLabel: {
-    fontSize: 9,
+  targetUrlText: {
+    fontSize: 13,
     fontWeight: '600',
-    marginTop: 2,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
   },
-
-  // --- Signals section ---
-  signalsSection: {
-    borderTopWidth: 1,
-    marginHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-    paddingBottom: Spacing.four,
-  },
-  signalsHeading: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    marginBottom: Spacing.two,
-  },
-  signalRow: {
+  metricsRow: {
     flexDirection: 'row',
     gap: Spacing.two,
-    marginBottom: Spacing.two,
-    alignItems: 'flex-start',
+    padding: Spacing.four,
   },
-  signalTextContainer: {
+  metricTile: {
     flex: 1,
+    alignItems: 'center',
+    paddingVertical: Spacing.three,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    gap: 2,
   },
-  signalTitle: {
-    fontSize: 12,
+  metricVal: {
+    fontSize: 18,
+    fontWeight: '800',
+    fontFamily: 'monospace',
+  },
+  metricSub: {
+    fontSize: 11,
     fontWeight: '600',
   },
-  signalDesc: {
-    fontSize: 11,
-    marginTop: 2,
-    lineHeight: 16,
+  signalsWrap: {
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.four,
+    gap: Spacing.two,
+  },
+  signalsHeader: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  signalLine: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  signalLineText: {
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 17,
   },
 });

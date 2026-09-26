@@ -1,76 +1,36 @@
-import React, { useEffect } from 'react';
-import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withSequence,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Palette, Radius } from '@/constants/theme';
 import { useAppMode } from '@/context/AppModeContext';
 import { useAppTheme } from '@/context/ThemeContext';
 
 export function ModeBadge() {
   const { isDemoMode, toggleDemoMode } = useAppMode();
-  const { isDark } = useAppTheme();
-  const pulse = useSharedValue(1);
-  const glowOpacity = useSharedValue(0.4);
-
-  useEffect(() => {
-    if (!isDemoMode) {
-      // Pulse the green dot for Live mode
-      pulse.value = withRepeat(
-        withSequence(
-          withTiming(1.4, { duration: 700, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) })
-        ),
-        -1,
-        false
-      );
-      glowOpacity.value = withRepeat(
-        withSequence(
-          withTiming(1, { duration: 700 }),
-          withTiming(0.3, { duration: 700 })
-        ),
-        -1,
-        false
-      );
-    } else {
-      pulse.value = withTiming(1, { duration: 200 });
-      glowOpacity.value = withTiming(0.4, { duration: 200 });
-    }
-  }, [isDemoMode]);
-
-  const dotAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulse.value }],
-    opacity: glowOpacity.value,
-  }));
-
-  const dotColor = isDemoMode ? Palette.brand.primaryLight : Palette.risk.safe;
-  const bgColor = isDemoMode
-    ? (isDark ? 'rgba(59,130,246,0.12)' : 'rgba(59,130,246,0.08)')
-    : (isDark ? 'rgba(34,211,238,0.1)' : 'rgba(34,211,238,0.08)');
-  const borderColor = isDemoMode
-    ? (isDark ? 'rgba(59,130,246,0.3)' : 'rgba(59,130,246,0.5)')
-    : (isDark ? 'rgba(34,211,238,0.3)' : 'rgba(34,211,238,0.5)');
-  const textColor = isDemoMode
-    ? (isDark ? Palette.brand.primaryLight : Palette.brand.primaryDark)
-    : (isDark ? Palette.risk.safe : Palette.risk.safeDark);
-  const label = isDemoMode ? 'DEMO' : 'LIVE';
+  const { isDark, colors } = useAppTheme();
 
   return (
     <TouchableOpacity
-      style={[styles.badge, { backgroundColor: bgColor, borderColor }]}
+      style={[
+        styles.badge,
+        {
+          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+          borderColor: colors.cardBorder,
+        },
+      ]}
       onPress={toggleDemoMode}
       activeOpacity={0.7}
     >
-      <View style={[styles.dotWrap]}>
-        <Animated.View style={[styles.dotGlow, { backgroundColor: dotColor }, dotAnimStyle]} />
-        <View style={[styles.dot, { backgroundColor: dotColor }]} />
-      </View>
-      <Text style={[styles.text, { color: textColor }]}>{label}</Text>
+      <View
+        style={[
+          styles.indicatorDot,
+          {
+            backgroundColor: isDemoMode ? Palette.brand.primary : Palette.risk.safe,
+          },
+        ]}
+      />
+      <Text style={[styles.label, { color: colors.textSecondary }]}>
+        {isDemoMode ? 'Sandbox' : 'Live'}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -81,31 +41,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingVertical: 5,
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
     borderRadius: Radius.full,
     borderWidth: 1,
   },
-  dotWrap: {
-    width: 8,
-    height: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dot: {
+  indicatorDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    position: 'absolute',
   },
-  dotGlow: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    position: 'absolute',
-  },
-  text: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
+  label: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,39 +6,23 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  Pressable,
+  ScrollView,
 } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withDelay,
-  withSpring,
-  withRepeat,
-  withSequence,
-  Easing,
-} from 'react-native-reanimated';
-import { useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   BellRinging,
-  ShieldWarning,
   ShieldCheck,
-  Lightning,
-  ChatCircleDots,
+  ChatCircleText,
   DeviceMobile,
-  CreditCard,
   Trash,
-  Keyboard,
-  CheckCircle,
-  Shield,
+  Sparkle,
 } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import {
-  InterceptedNotification,
   getLiveNotificationFeed,
   pushInterceptedNotification,
   clearLiveFeed,
+  InterceptedNotification,
 } from '@/services/liveNotificationFeed';
 import {
   getStoredPermissions,
@@ -51,734 +35,464 @@ import { ModeBadge } from '@/components/ui/mode-badge';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { RiskBadge } from '@/components/ui/risk-badge';
 
-// ─── Colour tokens ────────────────────────────────────────────────────────────
-const C = {
-  bgBase: '#050911',
-  bgCard: '#111827',
-  cardBorder: 'rgba(255,255,255,0.07)',
-  primary: '#3B82F6',
-  textPrimary: '#F1F5F9',
-  textSecondary: '#94A3B8',
-  dangerous: '#F87171',
-  suspicious: '#FBBF24',
-  safe: '#22D3EE',
-  dangerousBg: 'rgba(248,113,113,0.08)',
-  suspiciousBg: 'rgba(251,191,36,0.08)',
-  safeBg: 'rgba(34,211,238,0.08)',
-  amberBorder: 'rgba(251,191,36,0.35)',
-  amberBg: 'rgba(251,191,36,0.06)',
-  redPillBg: 'rgba(248,113,113,0.14)',
-  greenPillBg: 'rgba(34,211,238,0.12)',
-  bluePillBg: 'rgba(59,130,246,0.90)',
-} as const;
-
-// ─── FeedCard (animated) ──────────────────────────────────────────────────────
-interface FeedCardProps {
-  item: InterceptedNotification;
-  index: number;
-  expandedId: string | null;
-  setExpandedId: (id: string | null) => void;
-  getSourceIcon: (app: string) => React.ReactElement;
-  colors: any;
-  isDark: boolean;
-}
-
-function FeedCard({
-  item,
-  index,
-  expandedId,
-  setExpandedId,
-  getSourceIcon,
-  colors,
-  isDark,
-}: FeedCardProps) {
-  const opacity = useSharedValue(0);
-  const translateX = useSharedValue(20);
-
-  useEffect(() => {
-    const delay = index * 60;
-    opacity.value = withDelay(delay, withTiming(1, { duration: 350, easing: Easing.out(Easing.quad) }));
-    translateX.value = withDelay(delay, withTiming(0, { duration: 350, easing: Easing.out(Easing.quad) }));
-  }, []);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateX: translateX.value }],
-  }));
-
-  const isDangerous = item.analysis.overallRisk === 'DANGEROUS';
-  const isSuspicious = item.analysis.overallRisk === 'SUSPICIOUS';
-  const isExpanded = expandedId === item.id;
-
-  const accentColor = isDangerous ? C.dangerous : isSuspicious ? C.suspicious : 'transparent';
-  const cardBg = isDangerous ? (isDark ? C.dangerousBg : 'rgba(248,113,113,0.12)') : isSuspicious ? (isDark ? C.suspiciousBg : 'rgba(251,191,36,0.12)') : colors.card;
-
-  return (
-    <Animated.View style={[animatedStyle, styles.cardAnimWrapper]}>
-      <TouchableOpacity
-        style={[
-          styles.feedCard,
-          { backgroundColor: cardBg, borderColor: colors.cardBorder },
-          (isDangerous || isSuspicious) && {
-            borderLeftWidth: 4,
-            borderLeftColor: accentColor,
-          },
-        ]}
-        onPress={() => setExpandedId(isExpanded ? null : item.id)}
-        activeOpacity={0.78}
-      >
-        {/* Top row */}
-        <View style={styles.cardTopRow}>
-          <View style={styles.sourceGroup}>
-            <View style={[
-              styles.sourceIconChip,
-              { backgroundColor: isDangerous ? 'rgba(248,113,113,0.15)' : isSuspicious ? 'rgba(251,191,36,0.15)' : 'rgba(59,130,246,0.13)' },
-            ]}>
-              {getSourceIcon(item.sourceApp)}
-            </View>
-            <Text style={[styles.sourceAppName, { color: colors.textPrimary }]}>{item.sourceApp}</Text>
-            <Text style={[styles.senderText, { color: colors.textSecondary }]}>• {item.sender}</Text>
-          </View>
-          <RiskBadge level={item.analysis.overallRisk} score={item.analysis.riskScore} size="sm" />
-        </View>
-
-        {/* Message body */}
-        <Text style={[styles.rawMessageText, { color: isDark ? 'rgba(241,245,249,0.82)' : 'rgba(15,23,42,0.82)' }]} numberOfLines={isExpanded ? undefined : 2}>
-          {item.rawBody}
-        </Text>
-
-        {/* Bottom row */}
-        <View style={[styles.cardBottomRow, { borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]}>
-          <Text style={[styles.timeText, { color: colors.textSecondary }]}>
-            {new Date(item.receivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-
-          {isDangerous ? (
-            <View style={styles.threatFlag}>
-              <ShieldWarning size={13} color={C.dangerous} weight="bold" />
-              <Text style={styles.threatFlagText}>Flagged Threat</Text>
-            </View>
-          ) : (
-            <View style={styles.safeFlag}>
-              <ShieldCheck size={13} color={C.safe} weight="bold" />
-              <Text style={styles.safeFlagText}>Verified Safe</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Expanded signals */}
-        {isExpanded && item.analysis.signals.length > 0 && (
-          <View style={styles.expandedSignalsBox}>
-            <Text style={styles.signalsHeading}>THREAT SIGNALS DETECTED:</Text>
-            {item.analysis.signals.map((s) => (
-              <View key={s.id} style={styles.signalItem}>
-                <Text style={styles.signalTitle}>• {s.title}</Text>
-                <Text style={styles.signalDesc}>{s.description}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
-
-// ─── FilterPill (animated press) ─────────────────────────────────────────────
-interface FilterPillProps {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-  activeStyle: object;
-  activeTextStyle: object;
-}
-
-function FilterPill({ label, active, onPress, activeStyle, activeTextStyle }: FilterPillProps) {
-  const scale = useSharedValue(1);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const handlePressIn = () => {
-    scale.value = withSpring(0.92, { damping: 12, stiffness: 200 });
-  };
-
-  const handlePressOut = () => {
-    scale.value = withSpring(1, { damping: 12, stiffness: 200 });
-  };
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-    >
-      <Animated.View style={[styles.filterPill, active && activeStyle, animStyle]}>
-        <Text style={[styles.filterText, active && activeTextStyle]}>{label}</Text>
-      </Animated.View>
-    </Pressable>
-  );
-}
-
-// ─── PermissionBanner (pulsing left border) ───────────────────────────────────
-function PermissionBanner({ onGrant }: { onGrant: () => void }) {
-  const borderOpacity = useSharedValue(0.35);
-
-  useEffect(() => {
-    borderOpacity.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0.35, { duration: 900, easing: Easing.inOut(Easing.sin) }),
-      ),
-      -1,
-      false,
-    );
-  }, []);
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    borderLeftColor: `rgba(251,191,36,${borderOpacity.value})`,
-  }));
-
-  return (
-    <Animated.View style={[styles.permissionBanner, pulseStyle]}>
-      <View style={styles.permissionInfo}>
-        <View style={styles.permHeaderRow}>
-          <Keyboard size={14} color={C.suspicious} weight="bold" />
-          <Text style={styles.permissionTitle}>SMS, Notification & Keyboard Guard</Text>
-        </View>
-        <Text style={styles.permissionSub}>
-          Enable Android Notification Listener & Keyboard Input Guard to detect smishing and phishing keystrokes in real-time.
-        </Text>
-      </View>
-      <TouchableOpacity style={styles.grantBtn} onPress={onGrant}>
-        <Text style={styles.grantBtnText}>Grant Access</Text>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function LiveFeedScreen() {
   const insets = useSafeAreaInsets();
   const { isDemoMode } = useAppMode();
   const { colors, isDark } = useAppTheme();
+
   const [feed, setFeed] = useState<InterceptedNotification[]>([]);
   const [filter, setFilter] = useState<'ALL' | 'THREATS_ONLY' | 'SAFE_ONLY'>('ALL');
   const [refreshing, setRefreshing] = useState(false);
+  const [permissionState, setPermissionState] = useState<PermissionStatusState | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [permissionState, setPermissionState] = useState<PermissionStatusState>({
-    smsPermission: 'PROMPT',
-    notificationListener: 'PROMPT',
-    keyboardProtection: 'PROMPT',
-    overlayPermission: 'PROMPT',
-  });
 
   const fetchFeed = async () => {
     setRefreshing(true);
     const data = await getLiveNotificationFeed(isDemoMode);
     setFeed(data);
-    const perms = await getStoredPermissions();
-    setPermissionState(perms);
+    const perm = await getStoredPermissions();
+    setPermissionState(perm);
     setRefreshing(false);
   };
 
   useEffect(() => {
     fetchFeed();
+    const interval = setInterval(async () => {
+      const data = await getLiveNotificationFeed(isDemoMode);
+      setFeed(data);
+    }, 4000);
+    return () => clearInterval(interval);
   }, [isDemoMode]);
 
   const handleGrantPermissions = async () => {
-    const updated = await requestAllSecurityPermissions();
-    setPermissionState(updated);
+    const perm = await requestAllSecurityPermissions();
+    setPermissionState(perm);
   };
 
-  const handleSimulateNewIncoming = async (type: 'DANGEROUS' | 'SAFE') => {
-    if (type === 'DANGEROUS') {
-      const created = await pushInterceptedNotification(
-        'WHATSAPP',
-        'Electricity Authority Helpdesk',
-        'ALERT: Electricity bill pending for consumer #884920. Power disconnection order issued for tonight. Pay INR 450 to avoid cutoff.'
-      );
-      setFeed(prev => [created, ...prev]);
-    } else {
-      const created = await pushInterceptedNotification(
-        'GPAY',
-        'Zomato Order',
-        'You paid INR 320 to Zomato for your dinner order. Transaction ID: UPI/59201948.'
-      );
-      setFeed(prev => [created, ...prev]);
-    }
-  };
-
-  const handleClear = async () => {
+  const handleClearFeed = async () => {
     await clearLiveFeed();
     setFeed([]);
   };
 
-  const filteredFeed = feed.filter(item => {
-    if (filter === 'THREATS_ONLY')
-      return item.analysis.overallRisk === 'DANGEROUS' || item.analysis.overallRisk === 'SUSPICIOUS';
+  const handleSimulateNewIncoming = async (type: 'WHATSAPP_PHISH' | 'SMS_BILL_SCAM' | 'SAFE_BANK') => {
+    if (type === 'WHATSAPP_PHISH') {
+      await pushInterceptedNotification(
+        'WHATSAPP',
+        'SBI Alerts Helpdesk',
+        'Dear Customer, your NetBanking is deactivated due to PAN unlinked. Update at http://sbi-pan-kyc.buzz.'
+      );
+    } else if (type === 'SMS_BILL_SCAM') {
+      await pushInterceptedNotification(
+        'SMS',
+        'VK-DISCOM',
+        'Urgent: Power disconnection scheduled tonight at 9:30 PM. Pay Rs 450 to 9876543210@okaxis immediately.'
+      );
+    } else {
+      await pushInterceptedNotification(
+        'BANK_SMS',
+        'AD-HDFCBK',
+        'Rs 450.00 debited from HDFC Bank A/C ending 4021 on 26-Sep-2026. Avail Bal: Rs 42,100.00.'
+      );
+    }
+    const updated = await getLiveNotificationFeed(isDemoMode);
+    setFeed(updated);
+  };
+
+  const filteredFeed = feed.filter((item) => {
+    if (filter === 'THREATS_ONLY') return item.analysis.overallRisk !== 'SAFE';
     if (filter === 'SAFE_ONLY') return item.analysis.overallRisk === 'SAFE';
     return true;
   });
 
-  const getSourceIcon = (app: string): React.ReactElement => {
-    switch (app) {
-      case 'WHATSAPP':
-        return <ChatCircleDots size={16} color="#25D366" weight="fill" />;
-      case 'GPAY':
-      case 'PHONEPE':
-      case 'PAYTM':
-        return <CreditCard size={16} color={C.primary} weight="bold" />;
-      default:
-        return <DeviceMobile size={16} color={C.textSecondary} weight="bold" />;
-    }
-  };
-
-  const renderItem = ({ item, index }: { item: InterceptedNotification; index: number }) => (
-    <FeedCard
-      item={item}
-      index={index}
-      expandedId={expandedId}
-      setExpandedId={setExpandedId}
-      getSourceIcon={getSourceIcon}
-      colors={colors}
-      isDark={isDark}
-    />
-  );
+  const isPermGranted = permissionState?.notificationListener === 'GRANTED';
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.base }]}>
-      {/* ── Header ── */}
-      <View style={[styles.topBar, { backgroundColor: colors.elevated, borderBottomColor: colors.divider }]}>
-        <View style={styles.titleRow}>
-          <View style={styles.titleGroup}>
-            <BellRinging size={20} color={colors.textMuted} weight="bold" />
-            <Text style={[styles.heading, { color: colors.textPrimary }]}>Live Inbox</Text>
+      {/* Top Header */}
+      <View style={[styles.header, { borderBottomColor: colors.divider }]}>
+        <View style={styles.topRow}>
+          <View style={styles.brandGroup}>
+            <BellRinging size={22} color={colors.textPrimary} weight="fill" />
+            <Text style={[styles.brandTitle, { color: colors.textPrimary }]}>Live Stream</Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <ModeBadge />
+          <View style={styles.headerRight}>
             <ThemeToggle />
+            <ModeBadge />
+            {feed.length > 0 && (
+              <TouchableOpacity
+                style={[
+                  styles.clearBtn,
+                  {
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                    borderColor: colors.cardBorder,
+                  },
+                ]}
+                onPress={handleClearFeed}
+              >
+                <Trash size={13} color={colors.textSecondary} weight="bold" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
-        <Text style={[styles.subheading, { color: colors.textSecondary }]}>
-          {isDemoMode
-            ? 'Demonstration stream with simulated carriers'
-            : 'Live background stream from real device notifications'}
+        <Text style={[styles.tagline, { color: colors.textMuted }]}>
+          Real-time notification audit stream and intercepted scam alerts
         </Text>
       </View>
 
-      {/* ── Permission Banner ── */}
-      {permissionState.notificationListener !== 'GRANTED' && (
-        <PermissionBanner onGrant={handleGrantPermissions} />
-      )}
-
-      {/* ── Filter Pills ── */}
-      <View style={[styles.filterBar, { backgroundColor: colors.base, borderBottomColor: colors.divider }]}>
-        <FilterPill
-          label={`All (${feed.length})`}
-          active={filter === 'ALL'}
-          onPress={() => setFilter('ALL')}
-          activeStyle={styles.filterPillActive}
-          activeTextStyle={styles.filterTextActive}
-        />
-        <FilterPill
-          label={`Threats (${feed.filter(i => i.analysis.overallRisk !== 'SAFE').length})`}
-          active={filter === 'THREATS_ONLY'}
-          onPress={() => setFilter('THREATS_ONLY')}
-          activeStyle={styles.filterPillActiveThreat}
-          activeTextStyle={styles.filterTextActiveThreat}
-        />
-        <FilterPill
-          label={`Safe (${feed.filter(i => i.analysis.overallRisk === 'SAFE').length})`}
-          active={filter === 'SAFE_ONLY'}
-          onPress={() => setFilter('SAFE_ONLY')}
-          activeStyle={styles.filterPillActiveSafe}
-          activeTextStyle={styles.filterTextActiveSafe}
-        />
-      </View>
-
-      {/* ── Demo Simulation Bar ── */}
-      {isDemoMode && (
-        <View style={[styles.simulationBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.025)', borderBottomColor: colors.divider }]}>
-          <Text style={[styles.simLabel, { color: colors.textSecondary }]}>LIVE STREAM SIMULATION (DEMO MODE):</Text>
-          <View style={styles.simButtonsRow}>
-            <TouchableOpacity
-              style={styles.simThreatBtn}
-              onPress={() => handleSimulateNewIncoming('DANGEROUS')}
-            >
-              <Lightning size={12} color={C.dangerous} weight="bold" />
-              <Text style={styles.simThreatText}>Simulate Fraud Alert</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.simSafeBtn}
-              onPress={() => handleSimulateNewIncoming('SAFE')}
-            >
-              <Lightning size={12} color={C.safe} weight="bold" />
-              <Text style={styles.simSafeText}>Simulate Safe Alert</Text>
-            </TouchableOpacity>
+      {/* Permission Bar (if not granted) */}
+      {!isPermGranted && (
+        <View style={[styles.permCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <View style={styles.permTextWrap}>
+            <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Notification Interception Service</Text>
+            <Text style={[styles.permDesc, { color: colors.textMuted }]}>
+              Grant listener permission to intercept SMS and messaging notifications in real-time.
+            </Text>
           </View>
+          <TouchableOpacity style={styles.permBtn} onPress={handleGrantPermissions}>
+            <Text style={styles.permBtnText}>Grant Access</Text>
+          </TouchableOpacity>
         </View>
       )}
 
-      {/* ── Feed / Empty State ── */}
+      {/* Filter Tabs */}
+      <View style={[styles.filterBar, { borderBottomColor: colors.divider }]}>
+        <TouchableOpacity
+          style={[styles.filterTab, filter === 'ALL' && [styles.filterTabActive, { borderBottomColor: Palette.brand.primary }]]}
+          onPress={() => setFilter('ALL')}
+        >
+          <Text style={[styles.filterText, { color: filter === 'ALL' ? colors.textPrimary : colors.textMuted }]}>
+            All Events ({feed.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterTab, filter === 'THREATS_ONLY' && [styles.filterTabActive, { borderBottomColor: '#DC2626' }]]}
+          onPress={() => setFilter('THREATS_ONLY')}
+        >
+          <Text style={[styles.filterText, { color: filter === 'THREATS_ONLY' ? '#DC2626' : colors.textMuted }]}>
+            Threats Only
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterTab, filter === 'SAFE_ONLY' && [styles.filterTabActive, { borderBottomColor: '#059669' }]]}
+          onPress={() => setFilter('SAFE_ONLY')}
+        >
+          <Text style={[styles.filterText, { color: filter === 'SAFE_ONLY' ? '#059669' : colors.textMuted }]}>
+            Verified Safe
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Feed List */}
       {filteredFeed.length === 0 ? (
-        <View style={[styles.emptyContainer, { backgroundColor: colors.base }]}>
-          <View style={styles.emptyIconWrap}>
-            <Shield size={52} color={colors.textMuted} weight="thin" />
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Live Protection Inbox Clear</Text>
-          <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
+        <View style={styles.emptyWrap}>
+          <ShieldCheck size={36} color={colors.textMuted} weight="duotone" />
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Intercepted Notifications</Text>
+          <Text style={[styles.emptySub, { color: colors.textMuted }]}>
             {isDemoMode
-              ? 'No notifications in stream. Use the simulator above to inject test alerts.'
-              : 'Zero unverified or suspicious notifications intercepted. Active Protection Shield is running.'}
+              ? 'Use the simulation actions below to test real-time interception.'
+              : 'Incoming messages and notifications will be logged and audited here.'}
           </Text>
         </View>
       ) : (
         <FlatList
           data={filteredFeed}
           keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 90 }]}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={fetchFeed}
-              tintColor={C.primary}
-              colors={[C.primary]}
-            />
-          }
-          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.feedList, { paddingBottom: insets.bottom + 120 }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchFeed} />}
+          renderItem={({ item }) => {
+            const isExpanded = expandedId === item.id;
+            return (
+              <TouchableOpacity
+                style={[
+                  styles.feedCard,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.cardBorder,
+                  },
+                ]}
+                onPress={() => setExpandedId(isExpanded ? null : item.id)}
+                activeOpacity={0.7}
+              >
+                {/* Clean 2-column header */}
+                <View style={styles.cardHeaderRow}>
+                  <View style={styles.headerSenderGroup}>
+                    <View
+                      style={[
+                        styles.sourceIconWrap,
+                        {
+                          backgroundColor:
+                            item.sourceApp === 'WHATSAPP'
+                              ? 'rgba(5, 150, 105, 0.1)'
+                              : 'rgba(37, 99, 235, 0.1)',
+                        },
+                      ]}
+                    >
+                      {item.sourceApp === 'WHATSAPP' ? (
+                        <ChatCircleText size={13} color="#059669" weight="fill" />
+                      ) : (
+                        <DeviceMobile size={13} color={Palette.brand.primary} weight="fill" />
+                      )}
+                    </View>
+                    <View style={styles.senderInfo}>
+                      <Text style={[styles.senderText, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {item.sender}
+                      </Text>
+                      <Text style={[styles.timeText, { color: colors.textMuted }]}>
+                        {new Date(item.receivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <RiskBadge level={item.analysis.overallRisk} score={item.analysis.riskScore} size="sm" />
+                </View>
+
+                {/* Message Body */}
+                <Text
+                  style={[styles.msgText, { color: colors.textSecondary }]}
+                  numberOfLines={isExpanded ? undefined : 2}
+                >
+                  {item.rawBody}
+                </Text>
+
+                {/* Expandable Evidence Breakdown */}
+                {isExpanded && (
+                  <View
+                    style={[
+                      styles.expandedBox,
+                      {
+                        backgroundColor: isDark ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.02)',
+                        borderColor: colors.divider,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.summaryTitle, { color: colors.textMuted }]}>ANALYSIS SUMMARY</Text>
+                    <Text style={[styles.summaryText, { color: colors.textPrimary }]}>
+                      {item.analysis.summary}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          }}
         />
+      )}
+
+      {/* Sandbox Simulation Bar */}
+      {isDemoMode && (
+        <View style={[styles.simBar, { backgroundColor: colors.elevated, borderTopColor: colors.divider }]}>
+          <Text style={[styles.simLabel, { color: colors.textMuted }]}>SIMULATE INCOMING</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.simScroll}>
+            <TouchableOpacity style={styles.simBtn} onPress={() => handleSimulateNewIncoming('WHATSAPP_PHISH')}>
+              <Text style={styles.simBtnText}>WhatsApp Phish</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.simBtn} onPress={() => handleSimulateNewIncoming('SMS_BILL_SCAM')}>
+              <Text style={styles.simBtnText}>Electricity SMS</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.simBtn} onPress={() => handleSimulateNewIncoming('SAFE_BANK')}>
+              <Text style={styles.simBtnText}>Legit Bank Debit</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
       )}
     </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: C.bgBase,
   },
-  topBar: {
+  header: {
     paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
-    backgroundColor: C.bgBase,
+    paddingBottom: Spacing.three,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
-  },
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  titleGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-  },
-  heading: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: C.textPrimary,
-    letterSpacing: -0.5,
-  },
-  subheading: {
-    fontSize: 12,
-    color: C.textSecondary,
-    marginTop: 3,
-  },
-
-  // Permission Banner
-  permissionBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: C.amberBg,
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderBottomWidth: 1,
-    borderBottomColor: C.amberBorder,
-    borderLeftWidth: 3,
-    borderLeftColor: C.suspicious,
-  },
-  permissionInfo: {
-    flex: 1,
-    marginRight: Spacing.two,
-  },
-  permHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 4,
-    marginBottom: 3,
   },
-  permissionTitle: {
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  brandGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  brandTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  clearBtn: {
+    padding: 6,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  tagline: {
+    fontSize: 12,
+  },
+  permCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    margin: Spacing.four,
+    padding: Spacing.three,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+  },
+  permTextWrap: {
+    flex: 1,
+    marginRight: Spacing.three,
+    gap: 2,
+  },
+  permTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: C.suspicious,
   },
-  permissionSub: {
-    fontSize: 10,
-    color: C.textSecondary,
-    lineHeight: 15,
+  permDesc: {
+    fontSize: 11,
   },
-  grantBtn: {
-    backgroundColor: C.primary,
-    paddingVertical: 7,
-    paddingHorizontal: 13,
+  permBtn: {
+    backgroundColor: Palette.brand.primary,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: Radius.sm,
   },
-  grantBtnText: {
+  permBtnText: {
+    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '700',
-    color: '#FFFFFF',
   },
-
-  // Filter Bar
   filterBar: {
     flexDirection: 'row',
-    gap: Spacing.two,
     paddingHorizontal: Spacing.four,
-    paddingVertical: 10,
-    backgroundColor: C.bgBase,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
   },
-  filterPill: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+  filterTab: {
+    paddingVertical: Spacing.three,
+    marginRight: Spacing.four,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
-  filterPillActive: {
-    backgroundColor: C.bluePillBg,
-    borderColor: C.primary,
-  },
-  filterPillActiveThreat: {
-    backgroundColor: C.redPillBg,
-    borderColor: 'rgba(248,113,113,0.40)',
-  },
-  filterPillActiveSafe: {
-    backgroundColor: C.greenPillBg,
-    borderColor: 'rgba(34,211,238,0.35)',
-  },
+  filterTabActive: {},
   filterText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: C.textSecondary,
-  },
-  filterTextActive: {
-    color: '#FFFFFF',
-  },
-  filterTextActiveThreat: {
-    color: C.dangerous,
-  },
-  filterTextActiveSafe: {
-    color: C.safe,
-  },
-
-  // Simulation Bar
-  simulationBar: {
-    paddingHorizontal: Spacing.four,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.025)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
-  },
-  simLabel: {
-    fontSize: 10,
     fontWeight: '700',
-    color: C.textSecondary,
-    letterSpacing: 0.7,
-    marginBottom: 6,
   },
-  simButtonsRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  simThreatBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(248,113,113,0.35)',
-    backgroundColor: 'rgba(248,113,113,0.08)',
-  },
-  simThreatText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: C.dangerous,
-  },
-  simSafeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(34,211,238,0.30)',
-    backgroundColor: 'rgba(34,211,238,0.07)',
-  },
-  simSafeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: C.safe,
-  },
-
-  // List
-  listContent: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-  },
-  cardAnimWrapper: {
-    marginBottom: Spacing.two,
+  feedList: {
+    padding: Spacing.four,
+    gap: Spacing.three,
   },
   feedCard: {
     borderRadius: Radius.lg,
-    padding: Spacing.three,
     borderWidth: 1,
-    borderColor: C.cardBorder,
-    overflow: 'hidden',
+    padding: Spacing.three,
+    gap: Spacing.two,
   },
-  cardTopRow: {
+  cardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
+    alignItems: 'flex-start',
+    gap: Spacing.two,
   },
-  sourceGroup: {
+  headerSenderGroup: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    flex: 1,
-    marginRight: 8,
+    gap: 8,
   },
-  sourceIconChip: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
+  sourceIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sourceAppName: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: C.textPrimary,
+  senderInfo: {
+    flex: 1,
   },
   senderText: {
-    fontSize: 11,
-    color: C.textSecondary,
-    flexShrink: 1,
-  },
-  rawMessageText: {
     fontSize: 13,
-    color: 'rgba(241,245,249,0.82)',
-    lineHeight: 19,
-    fontWeight: '400',
-    marginVertical: 5,
-  },
-  cardBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 6,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+    fontWeight: '700',
   },
   timeText: {
-    fontSize: 11,
-    color: C.textSecondary,
-    opacity: 0.7,
+    fontSize: 10,
+    marginTop: 1,
   },
-  threatFlag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+  msgText: {
+    fontSize: 13,
+    lineHeight: 18,
   },
-  threatFlagText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: C.dangerous,
-  },
-  safeFlag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  safeFlagText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: C.safe,
-  },
-
-  // Expanded signals
-  expandedSignalsBox: {
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderRadius: Radius.md,
+  expandedBox: {
     padding: Spacing.two,
-    marginTop: Spacing.two,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(248,113,113,0.15)',
+    marginTop: 4,
+    gap: 3,
   },
-  signalsHeading: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: C.dangerous,
-    letterSpacing: 0.5,
-    marginBottom: 5,
-    opacity: 0.8,
+  summaryTitle: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.8,
   },
-  signalItem: {
-    marginBottom: 5,
+  summaryText: {
+    fontSize: 12,
+    lineHeight: 16,
   },
-  signalTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: C.dangerous,
-  },
-  signalDesc: {
-    fontSize: 10,
-    color: C.textSecondary,
-    lineHeight: 14,
-  },
-
-  // Empty state
-  emptyContainer: {
+  emptyWrap: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.six,
-  },
-  emptyIconWrap: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: 'rgba(59,130,246,0.09)',
-    borderWidth: 1,
-    borderColor: 'rgba(59,130,246,0.18)',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.three,
+    padding: Spacing.six,
+    gap: Spacing.two,
   },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '700',
-    color: C.textPrimary,
-    textAlign: 'center',
-    marginBottom: 8,
   },
-  emptySubtext: {
-    fontSize: 13,
-    color: C.textSecondary,
+  emptySub: {
+    fontSize: 12,
     textAlign: 'center',
-    lineHeight: 20,
+    maxWidth: 280,
+    lineHeight: 18,
+  },
+  simBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two,
+    borderTopWidth: 1,
+    gap: 4,
+  },
+  simLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  simScroll: {
+    gap: Spacing.two,
+    paddingBottom: Spacing.two,
+  },
+  simBtn: {
+    backgroundColor: 'rgba(37, 99, 235, 0.08)',
+    borderColor: 'rgba(37, 99, 235, 0.25)',
+    borderWidth: 1,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: Radius.full,
+  },
+  simBtnText: {
+    color: Palette.brand.primary,
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

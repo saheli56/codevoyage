@@ -1,333 +1,215 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withDelay,
-  Easing,
-} from 'react-native-reanimated';
-import { Warning, ShieldCheck, ShieldWarning, ArrowRight } from 'phosphor-react-native';
-import { Palette, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { AnalysisResult } from '@/types/security';
 import { RiskBadge } from '@/components/ui/risk-badge';
 import { useAppTheme } from '@/context/ThemeContext';
+import { Warning, CheckCircle, ShieldWarning, ArrowRight } from 'phosphor-react-native';
 
 interface EvidenceCardProps {
   result: AnalysisResult;
 }
 
-function SignalRow({ signal, index, colors, isDark }: { signal: AnalysisResult['signals'][0]; index: number; colors: any; isDark: boolean }) {
-  const opacity = useSharedValue(0);
-  const translateY = useSharedValue(12);
-
-  useEffect(() => {
-    opacity.value = withDelay(index * 80, withTiming(1, { duration: 400, easing: Easing.out(Easing.exp) }));
-    translateY.value = withDelay(index * 80, withTiming(0, { duration: 400, easing: Easing.out(Easing.exp) }));
-  }, []);
-
-  const animStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateY: translateY.value }],
-  }));
-
-  const isCritical = signal.severity === 'CRITICAL' || signal.severity === 'HIGH';
-  const isMedium = signal.severity === 'MEDIUM';
-
-  const iconColor = isCritical
-    ? Palette.risk.dangerous
-    : isMedium
-    ? Palette.risk.suspicious
-    : Palette.risk.safe;
-
-  const Icon = isCritical ? Warning : isMedium ? ShieldWarning : ShieldCheck;
-
-  return (
-    <Animated.View style={[styles.signalRow, animStyle]}>
-      <View style={[styles.signalIconWrapper, {
-        backgroundColor: isCritical
-          ? 'rgba(248,113,113,0.1)'
-          : isMedium
-          ? 'rgba(251,191,36,0.1)'
-          : 'rgba(34,211,238,0.1)',
-        borderColor: isCritical
-          ? 'rgba(248,113,113,0.2)'
-          : isMedium
-          ? 'rgba(251,191,36,0.2)'
-          : 'rgba(34,211,238,0.2)',
-      }]}>
-        <Icon size={15} color={iconColor} weight="bold" />
-      </View>
-      <View style={styles.signalContent}>
-        <Text style={[styles.signalTitle, { color: colors.textPrimary }]}>{signal.title}</Text>
-        <Text style={[styles.signalDesc, { color: colors.textSecondary }]}>{signal.description}</Text>
-        {signal.observedValue && (
-          <View style={[styles.valueTag, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]}>
-            <Text style={[styles.valueTagText, { color: isDark ? Palette.brand.primaryLight : Palette.brand.primaryDark }]}>{signal.observedValue}</Text>
-          </View>
-        )}
-      </View>
-    </Animated.View>
-  );
-}
-
-function ActionRow({ act, index, colors, isDark }: { act: AnalysisResult['actions'][0]; index: number; colors: any; isDark: boolean }) {
-  const opacity = useSharedValue(0);
-  const translateX = useSharedValue(-10);
-
-  useEffect(() => {
-    opacity.value = withDelay(index * 60, withTiming(1, { duration: 350 }));
-    translateX.value = withDelay(index * 60, withTiming(0, { duration: 350, easing: Easing.out(Easing.ease) }));
-  }, []);
-
-  const animStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateX: translateX.value }],
-  }));
-
-  return (
-    <Animated.View style={[styles.actionItem, animStyle]}>
-      <View style={[styles.actionIconWrap, { backgroundColor: isDark ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.15)' }]}>
-        <ArrowRight size={14} color={isDark ? Palette.brand.primaryLight : Palette.brand.primaryDark} weight="bold" />
-      </View>
-      <View style={styles.actionTextContainer}>
-        <Text style={[styles.actionTitle, { color: isDark ? Palette.brand.primaryLight : Palette.brand.primaryDark }]}>{act.title}</Text>
-        <Text style={[styles.actionDesc, { color: colors.textSecondary }]}>{act.description}</Text>
-      </View>
-    </Animated.View>
-  );
-}
-
 export function EvidenceCard({ result }: EvidenceCardProps) {
   const { colors, isDark } = useAppTheme();
-  const opacity = useSharedValue(0);
-  const scale = useSharedValue(0.96);
-
-  useEffect(() => {
-    opacity.value = withTiming(1, { duration: 450, easing: Easing.out(Easing.exp) });
-    scale.value = withTiming(1, { duration: 450, easing: Easing.out(Easing.exp) });
-  }, [result.id]);
-
-  const cardStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ scale: scale.value }],
-  }));
-
-  const riskColors = {
-    DANGEROUS: {
-      border: isDark ? 'rgba(248,113,113,0.3)' : 'rgba(248,113,113,0.5)',
-      headerBg: isDark ? 'rgba(248,113,113,0.05)' : 'rgba(248,113,113,0.1)',
-      glowBar: Palette.risk.dangerous,
-    },
-    SUSPICIOUS: {
-      border: isDark ? 'rgba(251,191,36,0.25)' : 'rgba(251,191,36,0.5)',
-      headerBg: isDark ? 'rgba(251,191,36,0.05)' : 'rgba(251,191,36,0.1)',
-      glowBar: Palette.risk.suspicious,
-    },
-    SAFE: {
-      border: isDark ? 'rgba(34,211,238,0.2)' : 'rgba(34,211,238,0.4)',
-      headerBg: isDark ? 'rgba(34,211,238,0.05)' : 'rgba(34,211,238,0.1)',
-      glowBar: Palette.risk.safe,
-    },
-  };
-
-  const riskColor = riskColors[result.overallRisk] ?? riskColors.SAFE;
 
   return (
-    <Animated.View style={[styles.card, { backgroundColor: colors.card, borderColor: riskColor.border }, cardStyle]}>
-      {/* Top glow bar */}
-      <View style={[styles.topBar, { backgroundColor: riskColor.glowBar }]} />
-
-      <View style={[styles.headerSection, { backgroundColor: riskColor.headerBg, borderBottomColor: colors.divider }]}>
-        <View style={styles.headerRow}>
-          <View style={styles.titleContainer}>
-            <Text style={[styles.headerLabel, { color: colors.textMuted }]}>ASSESSMENT RESULT</Text>
-            <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-              {new Date(result.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-          </View>
-          <RiskBadge level={result.overallRisk} score={result.riskScore} size="md" />
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.cardBorder,
+        },
+      ]}
+    >
+      {/* Header / Primary Classification */}
+      <View style={[styles.header, { borderBottomColor: colors.divider }]}>
+        <View style={styles.headerLeft}>
+          <Text style={[styles.kicker, { color: colors.textMuted }]}>ASSESSMENT VERDICT</Text>
+          <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+            Audited at {new Date(result.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
         </View>
+        <RiskBadge level={result.overallRisk} score={result.riskScore} size="md" />
       </View>
 
+      {/* Summary Narrative */}
       <View style={styles.body}>
-        <Text style={[styles.summaryText, { color: colors.textPrimary }]}>{result.summary}</Text>
+        <Text style={[styles.summary, { color: colors.textPrimary }]}>{result.summary}</Text>
 
+        {/* Signals List */}
         {result.signals.length > 0 && (
-          <View style={styles.signalsSection}>
-            <View style={styles.sectionHeaderRow}>
-              <View style={[styles.sectionLine, { backgroundColor: colors.divider }]} />
-              <Text style={[styles.sectionHeading, { color: colors.textMuted }]}>SIGNALS ({result.signals.length})</Text>
-              <View style={[styles.sectionLine, { backgroundColor: colors.divider }]} />
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
+              EVIDENCE & DETECTION SIGNALS ({result.signals.length})
+            </Text>
+            <View style={styles.signalsList}>
+              {result.signals.map((sig) => {
+                const isCrit = sig.severity === 'CRITICAL' || sig.severity === 'HIGH';
+                return (
+                  <View
+                    key={sig.id}
+                    style={[
+                      styles.signalRow,
+                      {
+                        backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+                        borderColor: colors.cardBorder,
+                      },
+                    ]}
+                  >
+                    <View style={styles.signalIconWrap}>
+                      {isCrit ? (
+                        <Warning size={14} color="#DC2626" weight="fill" />
+                      ) : (
+                        <CheckCircle size={14} color="#059669" weight="fill" />
+                      )}
+                    </View>
+                    <View style={styles.signalContent}>
+                      <Text style={[styles.signalTitle, { color: colors.textPrimary }]}>{sig.title}</Text>
+                      <Text style={[styles.signalDesc, { color: colors.textSecondary }]}>{sig.description}</Text>
+                      {sig.observedValue && (
+                        <View
+                          style={[
+                            styles.valueTag,
+                            {
+                              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.valueTagText, { color: colors.textSecondary }]} numberOfLines={1}>
+                            {sig.observedValue}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
             </View>
-            {result.signals.map((signal, i) => (
-              <SignalRow key={signal.id} signal={signal} index={i} colors={colors} isDark={isDark} />
-            ))}
           </View>
         )}
 
+        {/* Recommended Actions */}
         {result.actions.length > 0 && (
-          <View style={styles.actionsSection}>
-            <View style={styles.sectionHeaderRow}>
-              <View style={[styles.sectionLine, { backgroundColor: colors.divider }]} />
-              <Text style={[styles.sectionHeading, { color: colors.textMuted }]}>ACTIONS</Text>
-              <View style={[styles.sectionLine, { backgroundColor: colors.divider }]} />
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>RECOMMENDED MITIGATION</Text>
+            <View style={styles.actionsList}>
+              {result.actions.map((act) => (
+                <View key={act.id} style={styles.actionItem}>
+                  <ArrowRight size={13} color={colors.textMuted} weight="bold" />
+                  <View style={styles.actionTextWrap}>
+                    <Text style={[styles.actionTitle, { color: colors.textPrimary }]}>{act.title}</Text>
+                    {act.description ? (
+                      <Text style={[styles.actionDesc, { color: colors.textSecondary }]}>{act.description}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              ))}
             </View>
-            {result.actions.map((act, i) => (
-              <ActionRow key={act.id} act={act} index={i} colors={colors} isDark={isDark} />
-            ))}
           </View>
         )}
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: Palette.surface.card,
-    borderRadius: Radius.xl,
+  container: {
+    borderRadius: Radius.lg,
     borderWidth: 1,
-    marginTop: Spacing.three,
+    marginTop: Spacing.four,
     overflow: 'hidden',
   },
-  topBar: {
-    height: 2,
-    width: '100%',
-    opacity: 0.8,
-  },
-  headerSection: {
-    padding: Spacing.four,
-    borderBottomWidth: 1,
-    borderBottomColor: Palette.surface.divider,
-  },
-  headerRow: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    padding: Spacing.four,
+    borderBottomWidth: 1,
   },
-  titleContainer: {
-    flex: 1,
-    marginRight: Spacing.two,
+  headerLeft: {
+    gap: 2,
   },
-  headerLabel: {
+  kicker: {
     fontSize: 10,
     fontWeight: '800',
-    color: Palette.text.muted,
-    letterSpacing: 1.2,
+    letterSpacing: 0.8,
   },
   timestamp: {
-    fontSize: 12,
-    color: Palette.text.secondary,
-    marginTop: 3,
-    fontWeight: '500',
+    fontSize: 11,
   },
   body: {
     padding: Spacing.four,
+    gap: Spacing.four,
   },
-  summaryText: {
+  summary: {
     fontSize: 14,
-    color: Palette.text.primary,
-    lineHeight: 22,
     fontWeight: '500',
-    marginBottom: Spacing.three,
+    lineHeight: 21,
   },
-  signalsSection: {
-    marginTop: Spacing.two,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  section: {
     gap: Spacing.two,
-    marginBottom: Spacing.three,
   },
-  sectionLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Palette.surface.divider,
-  },
-  sectionHeading: {
+  sectionTitle: {
     fontSize: 10,
     fontWeight: '800',
-    color: Palette.text.muted,
-    letterSpacing: 1.2,
+    letterSpacing: 0.8,
+  },
+  signalsList: {
+    gap: Spacing.two,
   },
   signalRow: {
     flexDirection: 'row',
-    marginBottom: Spacing.two,
     alignItems: 'flex-start',
-    gap: Spacing.two,
-  },
-  signalIconWrapper: {
-    width: 30,
-    height: 30,
+    gap: 10,
+    padding: Spacing.three,
     borderRadius: Radius.md,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    marginTop: 1,
+  },
+  signalIconWrap: {
+    marginTop: 2,
   },
   signalContent: {
     flex: 1,
+    gap: 3,
   },
   signalTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: Palette.text.primary,
   },
   signalDesc: {
     fontSize: 12,
-    color: Palette.text.secondary,
-    marginTop: 2,
     lineHeight: 17,
   },
   valueTag: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    paddingVertical: 2,
-    paddingHorizontal: 8,
+    paddingVertical: 3,
+    paddingHorizontal: 7,
     borderRadius: Radius.sm,
     alignSelf: 'flex-start',
-    marginTop: 5,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    marginTop: 4,
   },
   valueTagText: {
     fontSize: 11,
     fontFamily: 'monospace',
-    color: Palette.brand.primaryLight,
   },
-  actionsSection: {
-    marginTop: Spacing.two,
+  actionsList: {
+    gap: Spacing.two,
   },
   actionItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Spacing.two,
-    marginBottom: Spacing.two,
+    gap: 8,
   },
-  actionIconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: Radius.sm,
-    backgroundColor: 'rgba(59,130,246,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    marginTop: 1,
-  },
-  actionTextContainer: {
+  actionTextWrap: {
     flex: 1,
+    gap: 1,
   },
   actionTitle: {
     fontSize: 13,
-    fontWeight: '700',
-    color: Palette.brand.primaryLight,
+    fontWeight: '600',
   },
   actionDesc: {
     fontSize: 12,
-    color: Palette.text.secondary,
-    marginTop: 1,
-    lineHeight: 17,
   },
 });

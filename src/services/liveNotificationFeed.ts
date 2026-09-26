@@ -25,7 +25,7 @@ export const INITIAL_LIVE_NOTIFICATIONS: InterceptedNotification[] = [
   {
     id: 'demo-notif-2',
     sourceApp: 'WHATSAPP',
-    sender: '+91 98765 43210',
+    sender: 'Electricity Dept Alerts',
     rawBody: 'Priy Grahak, aapka bijli connection aaj raat 9:30 baje kat diya jayega kyunki bill update nahi hai. Turant call kare.',
     receivedAt: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
     analysis: analyzeMessage('Priy Grahak, aapka bijli connection aaj raat 9:30 baje kat diya jayega kyunki bill update nahi hai. Turant call kare.')
@@ -37,14 +37,6 @@ export const INITIAL_LIVE_NOTIFICATIONS: InterceptedNotification[] = [
     rawBody: 'Your HDFC Bank account credit card ending in 4021 was charged INR 450.00 at Starbucks on 26-Sep-2026.',
     receivedAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
     analysis: analyzeMessage('Your HDFC Bank account credit card ending in 4021 was charged INR 450.00 at Starbucks on 26-Sep-2026.')
-  },
-  {
-    id: 'demo-notif-4',
-    sourceApp: 'GPAY',
-    sender: 'UPI AutoPay',
-    rawBody: 'Mandate approval request for INR 15,000 to sbi-lottery-support@okaxis. Enter UPI PIN to authorize.',
-    receivedAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-    analysis: analyzeMessage('Mandate approval request for INR 15,000 to sbi-lottery-support@okaxis. Enter UPI PIN to authorize.')
   }
 ];
 
@@ -60,7 +52,6 @@ export async function getLiveNotificationFeed(isDemoMode: boolean = true): Promi
     }
     const parsed: InterceptedNotification[] = JSON.parse(data);
     if (!isDemoMode) {
-      // In live production mode, hide all pre-seeded demo notifications
       return parsed.filter(item => !item.id.startsWith('demo-notif-'));
     }
     return parsed;
@@ -74,20 +65,29 @@ export async function pushInterceptedNotification(
   sender: string,
   rawBody: string
 ): Promise<InterceptedNotification> {
-  const analysis = analyzeMessage(rawBody);
+  const cleanBody = rawBody.trim();
+  const analysis = analyzeMessage(cleanBody);
   const newNotif: InterceptedNotification = {
     id: `live-notif-${Date.now()}`,
     sourceApp,
     sender,
-    rawBody,
+    rawBody: cleanBody,
     receivedAt: new Date().toISOString(),
     analysis
   };
 
   try {
     const current = await getLiveNotificationFeed(true);
-    const updated = [newNotif, ...current].slice(0, 100);
-    await AsyncStorage.setItem(STORAGE_KEY_FEED, JSON.stringify(updated));
+    
+    // Deduplication: if the exact same body was pushed within the last 15 minutes, don't spam
+    const isDuplicate = current.some(
+      (item) => item.rawBody === cleanBody && Math.abs(Date.now() - new Date(item.receivedAt).getTime()) < 15 * 60 * 1000
+    );
+
+    if (!isDuplicate) {
+      const updated = [newNotif, ...current].slice(0, 100);
+      await AsyncStorage.setItem(STORAGE_KEY_FEED, JSON.stringify(updated));
+    }
   } catch {
     // In-memory fallback
   }

@@ -1,9 +1,20 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ScrollView, Alert, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  ScrollView,
+  Alert,
+  Platform,
+} from 'react-native';
 import { Megaphone, X, CheckCircle, ShieldWarning } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { CommunityReport } from '@/types/security';
 import { submitCommunityReport } from '@/services/storageService';
+import { useAppTheme } from '@/context/ThemeContext';
 
 interface ReportModalProps {
   visible: boolean;
@@ -18,8 +29,10 @@ export function ReportModal({
   onClose,
   onReportSubmitted,
   initialIdentifier = '',
-  initialCategory = 'SMISHING'
+  initialCategory = 'SMISHING',
 }: ReportModalProps) {
+  const { colors, isDark } = useAppTheme();
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [targetIdentifier, setTargetIdentifier] = useState(initialIdentifier);
@@ -59,82 +72,121 @@ export function ReportModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <View style={styles.headerRow}>
+      <View style={[styles.modalOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.75)' : 'rgba(0,0,0,0.45)' }]}>
+        <View style={[styles.modalCard, { backgroundColor: colors.elevated, borderColor: colors.cardBorder }]}>
+          <View style={[styles.headerRow, { borderBottomColor: colors.divider }]}>
             <View style={styles.headerTitleGroup}>
-              <Megaphone size={20} color={Palette.brand.primary} weight="bold" />
-              <Text style={styles.headerTitle}>Report Suspicious Entity</Text>
+              <Megaphone size={18} color={colors.textPrimary} weight="bold" />
+              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Flag Threat Vector</Text>
             </View>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <X size={18} color={Palette.neutral.slate600} />
+            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: colors.inputBg }]} onPress={onClose}>
+              <X size={16} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
-            <Text style={styles.label}>Category</Text>
+            <Text style={[styles.label, { color: colors.textMuted }]}>CATEGORY</Text>
             <View style={styles.categoryWrap}>
-              {categories.map((c) => (
-                <TouchableOpacity
-                  key={c.value}
-                  style={[styles.categoryPill, category === c.value && styles.categoryPillActive]}
-                  onPress={() => setCategory(c.value)}
-                >
-                  <Text style={[styles.categoryText, category === c.value && styles.categoryTextActive]}>
-                    {c.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {categories.map((c) => {
+                const isActive = category === c.value;
+                return (
+                  <TouchableOpacity
+                    key={c.value}
+                    style={[
+                      styles.categoryPill,
+                      {
+                        backgroundColor: isActive ? Palette.brand.primary : colors.inputBg,
+                        borderColor: isActive ? Palette.brand.primary : colors.cardBorder,
+                      },
+                    ]}
+                    onPress={() => setCategory(c.value)}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryText,
+                        { color: isActive ? '#FFFFFF' : colors.textSecondary },
+                      ]}
+                    >
+                      {c.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
-            <Text style={styles.label}>Threat Identifier (URL / Phone / UPI ID)</Text>
+            <Text style={[styles.label, { color: colors.textMuted }]}>THREAT IDENTIFIER</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBg,
+                  borderColor: colors.inputBorder,
+                  color: colors.textPrimary,
+                },
+              ]}
               placeholder="e.g. sbi-kyc-verify.top or payment@upi"
-              placeholderTextColor={Palette.neutral.slate400}
+              placeholderTextColor={colors.textMuted}
               value={targetIdentifier}
               onChangeText={setTargetIdentifier}
               autoCapitalize="none"
             />
 
-            <Text style={styles.label}>Summary Title</Text>
+            <Text style={[styles.label, { color: colors.textMuted }]}>SUMMARY TITLE</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBg,
+                  borderColor: colors.inputBorder,
+                  color: colors.textPrimary,
+                },
+              ]}
               placeholder="e.g. Electricity disconnection extortion"
-              placeholderTextColor={Palette.neutral.slate400}
+              placeholderTextColor={colors.textMuted}
               value={title}
               onChangeText={setTitle}
             />
 
-            <Text style={styles.label}>Detailed Context (Optional)</Text>
+            <Text style={[styles.label, { color: colors.textMuted }]}>DETAILED CONTEXT</Text>
             <TextInput
-              style={[styles.input, styles.textArea]}
+              style={[
+                styles.input,
+                styles.textArea,
+                {
+                  backgroundColor: colors.inputBg,
+                  borderColor: colors.inputBorder,
+                  color: colors.textPrimary,
+                },
+              ]}
               placeholder="Describe what happened, any specific demands, or unusual instructions..."
-              placeholderTextColor={Palette.neutral.slate400}
+              placeholderTextColor={colors.textMuted}
               multiline
               numberOfLines={3}
               value={description}
               onChangeText={setDescription}
             />
 
-            <View style={styles.privacyNote}>
-              <ShieldWarning size={16} color={Palette.neutral.slate500} />
-              <Text style={styles.privacyText}>
-                Reports are crowdsourced and reviewed for community defense. Never submit personal banking passwords or OTPs.
+            <View style={[styles.privacyNote, { backgroundColor: colors.inputBg, borderColor: colors.cardBorder }]}>
+              <ShieldWarning size={15} color={colors.textMuted} />
+              <Text style={[styles.privacyText, { color: colors.textMuted }]}>
+                Never submit personal banking passwords or OTPs. All submissions are checked before broadcast.
               </Text>
             </View>
           </ScrollView>
 
-          <View style={styles.footerRow}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
+          <View style={[styles.footerRow, { borderTopColor: colors.divider }]}>
+            <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.cardBorder }]} onPress={onClose}>
+              <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]} 
+            <TouchableOpacity
+              style={[
+                styles.submitBtn,
+                { backgroundColor: Palette.brand.primary },
+                isSubmitting && styles.submitBtnDisabled,
+              ]}
               onPress={handleSubmit}
               disabled={isSubmitting}
             >
-              <CheckCircle size={16} color="#FFFFFF" weight="bold" />
               <Text style={styles.submitBtnText}>{isSubmitting ? 'Submitting...' : 'Submit Report'}</Text>
             </TouchableOpacity>
           </View>
@@ -147,82 +199,68 @@ export function ReportModal({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'flex-end',
   },
   modalCard: {
-    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
+    borderTopWidth: 1,
     padding: Spacing.four,
-    maxHeight: '85%',
+    maxHeight: '88%',
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.three,
+    paddingBottom: Spacing.three,
+    borderBottomWidth: 1,
   },
   headerTitleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: 8,
   },
   headerTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: Palette.neutral.slate900,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   closeBtn: {
-    padding: Spacing.one,
-    backgroundColor: Palette.neutral.slate100,
+    padding: 6,
     borderRadius: Radius.full,
   },
   formScroll: {
-    marginVertical: Spacing.two,
+    marginVertical: Spacing.three,
   },
   label: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Palette.neutral.slate700,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
     marginTop: Spacing.two,
     marginBottom: Spacing.one,
   },
   categoryWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.one,
+    gap: Spacing.two,
     marginBottom: Spacing.two,
   },
   categoryPill: {
-    paddingVertical: 6,
+    paddingVertical: 5,
     paddingHorizontal: Spacing.three,
     borderRadius: Radius.full,
-    backgroundColor: Palette.neutral.slate100,
     borderWidth: 1,
-    borderColor: Palette.neutral.slate200,
-  },
-  categoryPillActive: {
-    backgroundColor: Palette.brand.primaryMuted,
-    borderColor: Palette.brand.primary,
   },
   categoryText: {
     fontSize: 11,
     fontWeight: '600',
-    color: Palette.neutral.slate600,
-  },
-  categoryTextActive: {
-    color: Palette.brand.primaryDark,
   },
   input: {
-    backgroundColor: Palette.neutral.slate50,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.three,
-    paddingVertical: 8,
+    paddingVertical: 10,
     fontSize: 13,
-    color: Palette.neutral.slate900,
     borderWidth: 1,
-    borderColor: Palette.neutral.slate200,
     marginBottom: Spacing.two,
   },
   textArea: {
@@ -231,10 +269,10 @@ const styles = StyleSheet.create({
   },
   privacyNote: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: Palette.neutral.slate100,
+    alignItems: 'center',
     padding: Spacing.three,
     borderRadius: Radius.md,
+    borderWidth: 1,
     gap: Spacing.two,
     marginTop: Spacing.two,
     marginBottom: Spacing.three,
@@ -242,13 +280,13 @@ const styles = StyleSheet.create({
   privacyText: {
     flex: 1,
     fontSize: 11,
-    color: Palette.neutral.slate600,
     lineHeight: 16,
   },
   footerRow: {
     flexDirection: 'row',
     gap: Spacing.two,
-    marginTop: Spacing.two,
+    paddingTop: Spacing.three,
+    borderTopWidth: 1,
   },
   cancelBtn: {
     flex: 1,
@@ -256,29 +294,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: Radius.md,
-    backgroundColor: Palette.neutral.slate100,
+    borderWidth: 1,
   },
   cancelBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Palette.neutral.slate700,
   },
   submitBtn: {
     flex: 2,
-    flexDirection: 'row',
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.two,
     borderRadius: Radius.md,
-    backgroundColor: Palette.brand.primary,
   },
   submitBtnDisabled: {
-    backgroundColor: Palette.neutral.slate400,
+    opacity: 0.5,
   },
   submitBtnText: {
     fontSize: 13,
     fontWeight: '700',
     color: '#FFFFFF',
-  }
+  },
 });

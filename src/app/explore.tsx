@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,129 +6,51 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Switch,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSpring,
-  withSequence,
-  Easing,
-} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  CurrencyInr,
-  WarningCircle,
-  ArrowCounterClockwise,
-  ShieldCheck,
-} from 'phosphor-react-native';
+import { CurrencyInr, ArrowRight, ShieldWarning } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { analyzePaymentRisk } from '@/services/paymentAnalyzer';
 import { saveAnalysisResult } from '@/services/storageService';
 import { useAppMode } from '@/context/AppModeContext';
 import { useAppTheme } from '@/context/ThemeContext';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { ModeBadge } from '@/components/ui/mode-badge';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { AnalysisResult } from '@/types/security';
 import { EvidenceCard } from '@/components/ui/evidence-card';
 
 const SAMPLE_SCAM_PAYMENT = {
-  amount: '15000',
-  recipientVpa: 'sbi-lottery-support@okaxis',
+  amount: '45000',
+  recipientVpa: 'sbi-kyc-refund@okaxis',
+  contextNote: 'Electricity bill security refund deposit',
   isNewBeneficiary: true,
-  contextNote: 'Refund processing registration fee',
 };
-
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 export default function PaymentRiskScreen() {
   const insets = useSafeAreaInsets();
   const { isDemoMode } = useAppMode();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
+
   const [amount, setAmount] = useState('');
   const [recipientVpa, setRecipientVpa] = useState('');
   const [contextNote, setContextNote] = useState('');
   const [isNewBeneficiary, setIsNewBeneficiary] = useState(true);
   const [result, setResult] = useState<AnalysisResult | null>(null);
 
-  // Form card entrance animation
-  const cardOpacity = useSharedValue(0);
-  const cardTranslateY = useSharedValue(20);
+  const handleAssess = async () => {
+    if (!amount.trim() || !recipientVpa.trim()) return;
 
-  // Evidence card entrance animation
-  const evidenceOpacity = useSharedValue(0);
-  const evidenceScale = useSharedValue(0.95);
-
-  // Primary button press scale
-  const buttonScale = useSharedValue(1);
-
-  useEffect(() => {
-    cardOpacity.value = withTiming(1, {
-      duration: 450,
-      easing: Easing.out(Easing.quad),
-    });
-    cardTranslateY.value = withTiming(0, {
-      duration: 450,
-      easing: Easing.out(Easing.quad),
-    });
-  }, []);
-
-  useEffect(() => {
-    if (result) {
-      evidenceOpacity.value = withTiming(1, { duration: 380, easing: Easing.out(Easing.quad) });
-      evidenceScale.value = withSpring(1, { damping: 18, stiffness: 200 });
-    } else {
-      evidenceOpacity.value = 0;
-      evidenceScale.value = 0.95;
-    }
-  }, [result]);
-
-  const cardAnimStyle = useAnimatedStyle(() => ({
-    opacity: cardOpacity.value,
-    transform: [{ translateY: cardTranslateY.value }],
-  }));
-
-  const evidenceAnimStyle = useAnimatedStyle(() => ({
-    opacity: evidenceOpacity.value,
-    transform: [{ scale: evidenceScale.value }],
-  }));
-
-  const buttonAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: buttonScale.value }],
-  }));
-
-  const handleButtonPressIn = () => {
-    buttonScale.value = withSpring(0.97, { damping: 20, stiffness: 300 });
-  };
-
-  const handleButtonPressOut = () => {
-    buttonScale.value = withSpring(1, { damping: 20, stiffness: 300 });
-  };
-
-  const handleAssess = async (customParams?: typeof SAMPLE_SCAM_PAYMENT) => {
-    const params = customParams || {
-      amount,
-      recipientVpa,
+    const analysis = analyzePaymentRisk({
+      amount: amount.trim(),
+      recipientVpa: recipientVpa.trim(),
       isNewBeneficiary,
-      contextNote,
-    };
-
-    if (!params.recipientVpa.trim()) return;
-
-    const res = analyzePaymentRisk(params);
-    setResult(res);
-    await saveAnalysisResult(res);
-  };
-
-  const handleReset = () => {
-    setAmount('');
-    setRecipientVpa('');
-    setContextNote('');
-    setIsNewBeneficiary(true);
-    setResult(null);
+      contextNote: contextNote.trim(),
+    });
+    setResult(analysis);
+    await saveAnalysisResult(analysis);
   };
 
   const loadSimulatedScam = () => {
@@ -136,74 +58,71 @@ export default function PaymentRiskScreen() {
     setRecipientVpa(SAMPLE_SCAM_PAYMENT.recipientVpa);
     setContextNote(SAMPLE_SCAM_PAYMENT.contextNote);
     setIsNewBeneficiary(SAMPLE_SCAM_PAYMENT.isNewBeneficiary);
-    handleAssess(SAMPLE_SCAM_PAYMENT);
+
+    const analysis = analyzePaymentRisk(SAMPLE_SCAM_PAYMENT);
+    setResult(analysis);
   };
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.base, paddingTop: insets.top }]}
+      style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.base }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + 90 },
-        ]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
+        {/* Top Header */}
+        <View style={[styles.header, { borderBottomColor: colors.divider }]}>
           <View style={styles.topRow}>
-            <View style={styles.titleGroup}>
-              <CurrencyInr size={20} color={Palette.brand.primary} weight="bold" />
-              <View style={styles.titleTextGroup}>
-                <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>Payment Risk</Text>
-                <Text style={[styles.screenSubtitle, { color: colors.textMuted }]}>
-                  Pre-flight screening before authorizing UPI or NetBanking transfers.
-                </Text>
-              </View>
+            <View style={styles.brandGroup}>
+              <CurrencyInr size={22} color={colors.textPrimary} weight="fill" />
+              <Text style={[styles.brandTitle, { color: colors.textPrimary }]}>Payment Risk</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
-              <ModeBadge />
+            <View style={styles.headerRight}>
               <ThemeToggle />
+              <ModeBadge />
             </View>
           </View>
+          <Text style={[styles.tagline, { color: colors.textMuted }]}>
+            Pre-flight UPI VPA and transfer anomaly evaluation
+          </Text>
         </View>
 
-        {/* Form card */}
-        <Animated.View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }, cardAnimStyle]}>
-          <Text style={[styles.formSectionLabel, { color: colors.textMuted }]}>TRANSACTION PARAMETERS</Text>
+        {/* Input Panel */}
+        <View style={[styles.inputPanel, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <Text style={[styles.panelLabel, { color: colors.textMuted }]}>TRANSACTION PARAMETERS</Text>
 
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Transfer Amount (INR)</Text>
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Transfer Amount (INR)</Text>
             <TextInput
-              style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
-              placeholder="e.g. 5000"
+              style={[styles.textInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
+              placeholder="e.g. 15000"
               placeholderTextColor={colors.textMuted}
-              keyboardType="numeric"
               value={amount}
               onChangeText={setAmount}
+              keyboardType="numeric"
             />
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Recipient UPI ID / VPA</Text>
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Recipient UPI VPA / Handle</Text>
             <TextInput
-              style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
-              placeholder="e.g. merchant@okaxis or user@upi"
+              style={[styles.textInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
+              placeholder="e.g. power-bill-help@okaxis"
               placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
               value={recipientVpa}
               onChangeText={setRecipientVpa}
+              autoCapitalize="none"
             />
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Payment Purpose / Remarks</Text>
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Payment Context / Remark</Text>
             <TextInput
-              style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
-              placeholder="e.g. advance tax, refund fee, verification"
+              style={[styles.textInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
+              placeholder="e.g. Electricity bill clearance"
               placeholderTextColor={colors.textMuted}
               value={contextNote}
               onChangeText={setContextNote}
@@ -211,64 +130,48 @@ export default function PaymentRiskScreen() {
           </View>
 
           <View style={[styles.switchRow, { borderTopColor: colors.divider }]}>
-            <View style={styles.switchTextContainer}>
-              <Text style={[styles.switchLabel, { color: colors.textPrimary }]}>First-Time Beneficiary</Text>
-              <Text style={[styles.switchSubtext, { color: colors.textMuted }]}>
-                No prior transaction history with this recipient
-              </Text>
+            <View style={styles.switchInfo}>
+              <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>First-Time Beneficiary</Text>
+              <Text style={[styles.switchSubtitle, { color: colors.textMuted }]}>No prior transaction record</Text>
             </View>
             <Switch
               value={isNewBeneficiary}
               onValueChange={setIsNewBeneficiary}
-              trackColor={{
-                false: colors.divider,
-                true: '#2563EB',
-              }}
+              trackColor={{ false: colors.inputBorder, true: Palette.brand.primary }}
               thumbColor="#FFFFFF"
             />
           </View>
 
-          <View style={styles.actionRow}>
-            <Animated.View style={[styles.primaryButtonWrapper, buttonAnimStyle]}>
-              <TouchableOpacity
-                style={[
-                  styles.primaryButton,
-                  !recipientVpa.trim() && [styles.disabledButton, { backgroundColor: isDark ? Palette.neutral.slate700 : Palette.neutral.slate300 }],
-                ]}
-                onPress={() => handleAssess()}
-                onPressIn={handleButtonPressIn}
-                onPressOut={handleButtonPressOut}
-                disabled={!recipientVpa.trim()}
-                activeOpacity={1}
-              >
-                <ShieldCheck size={18} color="#FFFFFF" weight="bold" />
-                <Text style={styles.primaryButtonText}>Assess Payment Risk</Text>
-              </TouchableOpacity>
-            </Animated.View>
+          <TouchableOpacity
+            style={[
+              styles.assessBtn,
+              { backgroundColor: Palette.brand.primary },
+              (!amount.trim() || !recipientVpa.trim()) && styles.btnDisabled,
+            ]}
+            onPress={handleAssess}
+            disabled={!amount.trim() || !recipientVpa.trim()}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.assessBtnText}>Evaluate Risk Profile</Text>
+            <ArrowRight size={14} color="#FFFFFF" weight="bold" />
+          </TouchableOpacity>
+        </View>
 
-            <TouchableOpacity style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.cardBorder }]} onPress={handleReset}>
-              <ArrowCounterClockwise size={18} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-
-        {/* Demo mode simulation card */}
+        {/* Sandbox Scenario */}
         {isDemoMode && (
-          <View style={styles.quickTestsContainer}>
-            <Text style={styles.testLabel}>SIMULATE RISK SCENARIO (DEMO MODE)</Text>
-            <TouchableOpacity style={styles.simButton} onPress={loadSimulatedScam}>
-              <WarningCircle size={16} color={Palette.risk.dangerous} weight="bold" />
-              <Text style={styles.simButtonText}>Load High-Risk Advance-Fee Vector</Text>
+          <View style={[styles.sandboxCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <View style={styles.sandboxHeader}>
+              <ShieldWarning size={14} color="#D97706" weight="bold" />
+              <Text style={[styles.sandboxTitle, { color: colors.textSecondary }]}>SIMULATED FRAUD SCENARIOS</Text>
+            </View>
+            <TouchableOpacity style={styles.simulateBtn} onPress={loadSimulatedScam}>
+              <Text style={styles.simulateBtnText}>Load Fake Electricity VPA Vector</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Evidence card result */}
-        {result && (
-          <Animated.View style={evidenceAnimStyle}>
-            <EvidenceCard result={result} />
-          </Animated.View>
-        )}
+        {/* Evidence Card */}
+        {result && <EvidenceCard result={result} />}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -280,143 +183,124 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: Spacing.four,
+    gap: Spacing.four,
   },
   header: {
-    marginBottom: Spacing.three,
-    marginTop: Spacing.two,
+    paddingBottom: Spacing.three,
+    borderBottomWidth: 1,
+    gap: 4,
   },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
-  titleGroup: {
+  brandGroup: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.two,
-    flex: 1,
-    marginRight: Spacing.two,
+    alignItems: 'center',
+    gap: 8,
   },
-  titleTextGroup: {
-    flex: 1,
-  },
-  screenTitle: {
-    fontSize: 22,
+  brandTitle: {
+    fontSize: 18,
     fontWeight: '800',
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
-  screenSubtitle: {
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tagline: {
     fontSize: 12,
-    marginTop: 3,
-    lineHeight: 18,
   },
-  formCard: {
-    borderRadius: Radius.lg,
+  inputPanel: {
     padding: Spacing.four,
+    borderRadius: Radius.lg,
     borderWidth: 1,
+    gap: Spacing.three,
   },
-  formSectionLabel: {
+  panelLabel: {
     fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    marginBottom: Spacing.three,
-    textTransform: 'uppercase',
+    fontWeight: '800',
+    letterSpacing: 0.8,
   },
   fieldGroup: {
-    marginBottom: Spacing.three,
+    gap: 5,
   },
-  label: {
+  fieldLabel: {
     fontSize: 12,
     fontWeight: '600',
-    marginBottom: Spacing.one,
   },
-  input: {
+  textInput: {
+    height: 44,
     borderRadius: Radius.md,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: 10,
-    fontSize: 14,
     borderWidth: 1,
+    paddingHorizontal: Spacing.three,
+    fontSize: 13,
   },
   switchRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Spacing.two,
+    alignItems: 'center',
     borderTopWidth: 1,
+    paddingTop: Spacing.three,
     marginTop: Spacing.one,
-    marginBottom: Spacing.three,
   },
-  switchTextContainer: {
-    flex: 1,
-    marginRight: Spacing.two,
+  switchInfo: {
+    gap: 2,
   },
-  switchLabel: {
+  switchTitle: {
     fontSize: 13,
     fontWeight: '600',
   },
-  switchSubtext: {
+  switchSubtitle: {
     fontSize: 11,
-    marginTop: 2,
   },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  primaryButtonWrapper: {
-    flex: 1,
-  },
-  primaryButton: {
-    flex: 1,
+  assessBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2563EB',
-    paddingVertical: 14,
+    gap: 6,
+    paddingVertical: 12,
     borderRadius: Radius.md,
-    gap: Spacing.two,
+    marginTop: Spacing.two,
   },
-  disabledButton: {},
-  primaryButtonText: {
+  assessBtnText: {
     color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '700',
-    fontSize: 14,
   },
-  iconButton: {
-    padding: 12,
-    marginLeft: Spacing.two,
-    borderRadius: Radius.full,
-    borderWidth: 1,
+  btnDisabled: {
+    opacity: 0.4,
   },
-  quickTestsContainer: {
-    marginTop: Spacing.four,
+  sandboxCard: {
+    padding: Spacing.four,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Palette.risk.suspiciousBorder,
-    backgroundColor: Palette.risk.suspiciousLight,
-    padding: Spacing.three,
+    gap: Spacing.two,
   },
-  testLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Palette.neutral.slate400,
-    letterSpacing: 1.2,
-    marginBottom: Spacing.two,
-    textTransform: 'uppercase',
-  },
-  simButton: {
+  sandboxHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
-    backgroundColor: Palette.risk.dangerousLight,
-    paddingVertical: 10,
+    gap: 6,
+  },
+  sandboxTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  simulateBtn: {
+    backgroundColor: 'rgba(217, 119, 6, 0.08)',
+    borderColor: 'rgba(217, 119, 6, 0.25)',
+    borderWidth: 1,
+    paddingVertical: 9,
     paddingHorizontal: Spacing.three,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Palette.risk.dangerousBorder,
+    alignItems: 'center',
   },
-  simButtonText: {
+  simulateBtnText: {
+    color: '#D97706',
     fontSize: 12,
-    fontWeight: '600',
-    color: Palette.risk.dangerous,
+    fontWeight: '700',
   },
 });

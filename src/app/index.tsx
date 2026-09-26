@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,28 +13,14 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withRepeat,
-  withSequence,
-  withDelay,
-  Easing,
-} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  Shield,
-  Sparkle,
-  Trash,
-  ClipboardText,
-  Translate,
-  BellRinging,
-  Lightning,
+  ShieldCheck,
   Camera,
-  ImageSquare,
+  ClipboardText,
+  ArrowRight,
+  Sparkle,
   X,
-  ArrowDown,
 } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { analyzeMessage } from '@/services/riskEngine';
@@ -43,8 +29,8 @@ import { checkClipboardForThreats, simulateIncomingNotificationScan } from '@/se
 import { pickImageForAnalysis, simulateOcrFromSample } from '@/services/ocrExtractor';
 import { useAppMode } from '@/context/AppModeContext';
 import { useAppTheme } from '@/context/ThemeContext';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { ModeBadge } from '@/components/ui/mode-badge';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { AnalysisResult } from '@/types/security';
 import { EvidenceCard } from '@/components/ui/evidence-card';
 
@@ -59,7 +45,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { isDemoMode } = useAppMode();
   const { colors, isDark } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [inputText, setInputText] = useState('');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [isAutoProtectionActive, setIsAutoProtectionActive] = useState(true);
@@ -67,83 +53,6 @@ export default function HomeScreen() {
   const [isProcessingOcr, setIsProcessingOcr] = useState(false);
   const lastProcessedText = useRef('');
 
-  // ── Animation shared values ──────────────────────────────────────────────
-  const headerOpacity = useSharedValue(0);
-  const headerTranslateY = useSharedValue(-20);
-
-  const bannerOpacity = useSharedValue(0);
-  const bannerTranslateY = useSharedValue(12);
-
-  const inputCardOpacity = useSharedValue(0);
-  const inputCardTranslateY = useSharedValue(16);
-
-  const resultTranslateY = useSharedValue(20);
-  const resultOpacity = useSharedValue(0);
-
-  const dotScale = useSharedValue(1);
-
-  // ── Mount animations ─────────────────────────────────────────────────────
-  useEffect(() => {
-    // Header fade-in from top
-    headerOpacity.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) });
-    headerTranslateY.value = withTiming(0, { duration: 500, easing: Easing.out(Easing.cubic) });
-
-    // Banner with 150 ms delay
-    bannerOpacity.value = withDelay(150, withTiming(1, { duration: 450 }));
-    bannerTranslateY.value = withDelay(150, withTiming(0, { duration: 450, easing: Easing.out(Easing.cubic) }));
-
-    // Input card with 250 ms delay
-    inputCardOpacity.value = withDelay(250, withTiming(1, { duration: 450 }));
-    inputCardTranslateY.value = withDelay(250, withTiming(0, { duration: 450, easing: Easing.out(Easing.cubic) }));
-
-    // Pulsing dot
-    dotScale.value = withRepeat(
-      withSequence(
-        withTiming(1.5, { duration: 600, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-      false,
-    );
-  }, []);
-
-  // ── Animate result card when it appears ──────────────────────────────────
-  useEffect(() => {
-    if (analysisResult) {
-      resultTranslateY.value = 20;
-      resultOpacity.value = 0;
-      resultTranslateY.value = withTiming(0, { duration: 380, easing: Easing.out(Easing.cubic) });
-      resultOpacity.value = withTiming(1, { duration: 380 });
-    }
-  }, [analysisResult]);
-
-  // ── Animated styles ──────────────────────────────────────────────────────
-  const headerAnimStyle = useAnimatedStyle(() => ({
-    opacity: headerOpacity.value,
-    transform: [{ translateY: headerTranslateY.value }],
-  }));
-
-  const bannerAnimStyle = useAnimatedStyle(() => ({
-    opacity: bannerOpacity.value,
-    transform: [{ translateY: bannerTranslateY.value }],
-  }));
-
-  const inputCardAnimStyle = useAnimatedStyle(() => ({
-    opacity: inputCardOpacity.value,
-    transform: [{ translateY: inputCardTranslateY.value }],
-  }));
-
-  const resultAnimStyle = useAnimatedStyle(() => ({
-    opacity: resultOpacity.value,
-    transform: [{ translateY: resultTranslateY.value }],
-  }));
-
-  const dotAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: dotScale.value }],
-    opacity: isAutoProtectionActive ? 1 : 0.3,
-  }));
-
-  // ── Existing logic (untouched) ────────────────────────────────────────────
   useEffect(() => {
     const scanClipboard = async () => {
       if (!isAutoProtectionActive) return;
@@ -198,35 +107,19 @@ export default function HomeScreen() {
     }
   };
 
-  const handleSimulateOcr = (idx: number = 0) => {
-    const extracted = simulateOcrFromSample(idx);
-    setOcrImage(extracted.imageUri);
-    setInputText(extracted.extractedText);
-    setAnalysisResult(extracted.analysis);
-  };
-
-  const handleSimulateIncomingSms = async () => {
-    const simulatedText =
-      'VM-SBINB: Dear customer, your PAN is not linked to account XXXX4910. Netbanking deactivated. Link at http://sbi-pan-kyc.buzz immediately.';
-    setInputText(simulatedText);
-    const res = await simulateIncomingNotificationScan('VM-SBINB', simulatedText);
-    setAnalysisResult(res);
-  };
-
   const handlePasteAndScan = async () => {
     const detected = await checkClipboardForThreats('');
     if (detected) {
       setInputText(detected.text);
       setAnalysisResult(detected.result);
     } else {
-      Alert.alert('Clipboard Checked', 'No high-risk scam or threat patterns detected in your clipboard.');
+      Alert.alert('Clipboard Clear', 'No active threat patterns detected in your clipboard.');
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { paddingTop: insets.top }]}
+      style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.base }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
@@ -234,48 +127,39 @@ export default function HomeScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header ── */}
-        <Animated.View style={[styles.header, headerAnimStyle]}>
+        {/* Top Header */}
+        <View style={[styles.header, { borderBottomColor: colors.divider }]}>
           <View style={styles.topRow}>
-            <View style={styles.titleGroup}>
-              <Shield size={26} color={Palette.brand.primary} weight="fill" />
-              <Text style={styles.appTitle}>ScamShield</Text>
+            <View style={styles.brandGroup}>
+              <ShieldCheck size={24} color={colors.textPrimary} weight="fill" />
+              <Text style={[styles.brandTitle, { color: colors.textPrimary }]}>ScamShield</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={styles.headerRight}>
               <ThemeToggle />
               <ModeBadge />
             </View>
           </View>
-          <Text style={styles.appSubtitle}>
-            {isDemoMode
-              ? 'Demo Mode Active: Interactive vectors, OCR picker & simulators enabled'
-              : 'Production Mode Active: Live inputs only, dummy samples hidden'}
+          <Text style={[styles.tagline, { color: colors.textMuted }]}>
+            Real-time heuristic fraud defense & message verification
           </Text>
-        </Animated.View>
+        </View>
 
-        {/* ── Auto Protection Banner ── */}
-        <Animated.View style={[styles.autoProtectBanner, bannerAnimStyle]}>
-          <View style={styles.autoProtectInfo}>
-            <View style={styles.autoProtectTitleRow}>
-              {/* Pulsing dot */}
-              <Animated.View
-                style={[
-                  styles.pulsingDot,
-                  dotAnimStyle,
-                  { backgroundColor: isAutoProtectionActive ? '#22C55E' : Palette.neutral.slate500 },
-                ]}
-              />
-              <BellRinging
-                size={15}
-                color={isAutoProtectionActive ? '#22C55E' : Palette.neutral.slate500}
-                weight="bold"
-              />
-              <Text style={styles.autoProtectTitle}>Active Protection Shield</Text>
-            </View>
-            <Text style={styles.autoProtectSubtitle}>
-              {isAutoProtectionActive
-                ? 'Actively scanning incoming notifications & clipboard for fraud patterns'
-                : 'Automated background scanning paused'}
+        {/* Protection Toggle Bar */}
+        <View
+          style={[
+            styles.protectionBar,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.cardBorder,
+            },
+          ]}
+        >
+          <View style={styles.protectionInfo}>
+            <Text style={[styles.protectionTitle, { color: colors.textPrimary }]}>
+              Autonomous Background Protection
+            </Text>
+            <Text style={[styles.protectionDesc, { color: colors.textMuted }]}>
+              {isAutoProtectionActive ? 'Monitoring clipboard and message feeds' : 'Protection paused'}
             </Text>
           </View>
           <Switch
@@ -284,433 +168,274 @@ export default function HomeScreen() {
             trackColor={{ false: colors.inputBorder, true: Palette.brand.primary }}
             thumbColor="#FFFFFF"
           />
-        </Animated.View>
+        </View>
 
-        {/* ── Input Card ── */}
-        <Animated.View style={[styles.inputCard, inputCardAnimStyle]}>
-          {/* Card header row */}
-          <View style={styles.inputCardHeader}>
-            <Text style={styles.inputLabel}>INSPECT SUSPICIOUS MESSAGE, LINK, OR SCREENSHOT</Text>
+        {/* Primary Analysis Input */}
+        <View
+          style={[
+            styles.inputPanel,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.cardBorder,
+            },
+          ]}
+        >
+          <View style={styles.inputHeader}>
+            <Text style={[styles.inputLabel, { color: colors.textMuted }]}>AUDIT SUSPICIOUS CONTENT</Text>
             <TouchableOpacity
-              style={[styles.ocrButton, isProcessingOcr && styles.ocrButtonDisabled]}
+              style={[
+                styles.ocrButton,
+                {
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                  borderColor: colors.cardBorder,
+                },
+              ]}
               onPress={handlePickScreenshot}
               disabled={isProcessingOcr}
             >
               {isProcessingOcr ? (
-                <ActivityIndicator size="small" color={Palette.brand.primary} />
+                <ActivityIndicator size="small" color={colors.textPrimary} />
               ) : (
                 <>
-                  <Camera size={13} color={Palette.brand.primary} weight="bold" />
-                  <Text style={styles.ocrButtonText}>Upload Image</Text>
+                  <Camera size={13} color={colors.textSecondary} weight="bold" />
+                  <Text style={[styles.ocrButtonText, { color: colors.textSecondary }]}>Screenshot</Text>
                 </>
               )}
             </TouchableOpacity>
           </View>
 
-          {/* OCR preview strip */}
-          {ocrImage && (
-            <View style={styles.ocrPreviewWrap}>
-              <ImageSquare size={14} color={Palette.brand.primary} weight="bold" />
-              <Text style={styles.ocrPreviewText} numberOfLines={1}>
-                Text recognized from screenshot
-              </Text>
-              <TouchableOpacity onPress={() => setOcrImage(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <X size={13} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Text input */}
           <TextInput
-            style={styles.textInput}
-            placeholder="Paste SMS, WhatsApp text, Hinglish/Regional text, or tap 'Upload Image' above..."
-            placeholderTextColor={colors.textMuted}
+            style={[
+              styles.textInput,
+              {
+                backgroundColor: colors.inputBg,
+                borderColor: colors.inputBorder,
+                color: colors.textPrimary,
+              },
+            ]}
             multiline
             numberOfLines={4}
+            placeholder="Paste raw SMS text, WhatsApp message, payment note, or link to inspect..."
+            placeholderTextColor={colors.textMuted}
             value={inputText}
             onChangeText={setInputText}
           />
 
-          {/* ── Analyze Signals — full width ── */}
-          <TouchableOpacity
-            style={[styles.analyzeButton, !inputText.trim() && styles.analyzeButtonDisabled]}
-            onPress={() => handleAnalyze()}
-            disabled={!inputText.trim()}
-            activeOpacity={0.82}
-          >
-            <Sparkle size={18} color="#FFFFFF" weight="bold" />
-            <Text style={styles.analyzeButtonText}>Analyze Signals</Text>
-          </TouchableOpacity>
-
-          {/* ── Secondary action row ── */}
           <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.clipboardScanBtn} onPress={handlePasteAndScan} activeOpacity={0.75}>
-              <ClipboardText size={15} color={Palette.brand.primary} />
-              <Text style={styles.clipboardScanBtnText}>Check Clipboard</Text>
+            <TouchableOpacity
+              style={[
+                styles.analyzeBtn,
+                { backgroundColor: Palette.brand.primary },
+                !inputText.trim() && styles.btnDisabled,
+              ]}
+              onPress={() => handleAnalyze()}
+              disabled={!inputText.trim()}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.analyzeBtnText}>Inspect Content</Text>
+              <ArrowRight size={14} color="#FFFFFF" weight="bold" />
             </TouchableOpacity>
 
-            {inputText.length > 0 && (
-              <TouchableOpacity style={styles.iconButton} onPress={handleClear} activeOpacity={0.75}>
-                <Trash size={17} color={colors.textMuted} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </Animated.View>
-
-        {/* ── Demo Benchmark Section ── */}
-        {isDemoMode && (
-          <View style={styles.quickTestsContainer}>
-            {/* Divider with centered label */}
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.testLabel}>BENCHMARK SCENARIOS</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Simulate Live SMS pill */}
-            <View style={styles.testHeaderRow}>
-              <TouchableOpacity style={styles.simulateIncomingBtn} onPress={handleSimulateIncomingSms} activeOpacity={0.75}>
-                <Lightning size={12} color={Palette.brand.primary} weight="bold" />
-                <Text style={styles.simulateIncomingText}>Simulate Live SMS</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Horizontal chip scroll */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.sampleButtonsRow}
+            <TouchableOpacity
+              style={[
+                styles.clipboardBtn,
+                {
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                  borderColor: colors.cardBorder,
+                },
+              ]}
+              onPress={handlePasteAndScan}
+              activeOpacity={0.7}
             >
+              <ClipboardText size={14} color={colors.textSecondary} weight="bold" />
+              <Text style={[styles.clipboardBtnText, { color: colors.textSecondary }]}>Clipboard</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Demo Benchmarks in Sandbox Mode */}
+        {isDemoMode && (
+          <View style={styles.sandboxSection}>
+            <Text style={[styles.sandboxLabel, { color: colors.textMuted }]}>PRELOADED SCAM VECTORS</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
               <TouchableOpacity
-                style={styles.sampleButton}
+                style={[styles.sampleChip, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
                 onPress={() => loadSample(SAMPLE_SCAM_SMS)}
-                activeOpacity={0.75}
               >
-                <ClipboardText size={13} color={Palette.brand.primary} />
-                <Text style={styles.sampleButtonText}>KYC Phish (EN)</Text>
+                <Text style={[styles.sampleChipText, { color: colors.textSecondary }]}>Fake SBI KYC</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.sampleButton}
-                onPress={() => handleSimulateOcr(0)}
-                activeOpacity={0.75}
-              >
-                <Camera size={13} color={Palette.risk.dangerousDark} />
-                <Text style={styles.sampleButtonText}>Simulate Screenshot OCR</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.sampleButton}
+                style={[styles.sampleChip, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
                 onPress={() => loadSample(SAMPLE_REGIONAL_SMS)}
-                activeOpacity={0.75}
               >
-                <Translate size={13} color={Palette.risk.suspiciousDark} />
-                <Text style={styles.sampleButtonText}>Electricity (Hinglish)</Text>
+                <Text style={[styles.sampleChipText, { color: colors.textSecondary }]}>Electricity Threat</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.sampleButton}
+                style={[styles.sampleChip, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
                 onPress={() => loadSample(SAMPLE_SAFE_SMS)}
-                activeOpacity={0.75}
               >
-                <ClipboardText size={13} color={Palette.risk.safeDark} />
-                <Text style={styles.sampleButtonText}>Legit Alert</Text>
+                <Text style={[styles.sampleChipText, { color: colors.textSecondary }]}>Legitimate Bank</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
         )}
 
-        {/* ── Evidence Card ── */}
-        {analysisResult && (
-          <Animated.View style={resultAnimStyle}>
-            <EvidenceCard result={analysisResult} />
-          </Animated.View>
-        )}
+        {/* Evidence Card Result */}
+        {analysisResult && <EvidenceCard result={analysisResult} />}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-const createStyles = (colors: any) => StyleSheet.create({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.base,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
+    padding: Spacing.four,
+    gap: Spacing.four,
   },
-
-  // Header
   header: {
-    marginBottom: Spacing.three,
-    marginTop: Spacing.two,
+    paddingBottom: Spacing.three,
+    borderBottomWidth: 1,
+    gap: 4,
   },
   topRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  titleGroup: {
+  brandGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
-  appTitle: {
-    fontSize: 28,
+  brandTitle: {
+    fontSize: 18,
     fontWeight: '800',
-    color: colors.textPrimary,
-    letterSpacing: -0.8,
-    textShadowColor: Palette.brand.primaryGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 16,
+    letterSpacing: -0.3,
   },
-  appSubtitle: {
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tagline: {
     fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 6,
-    lineHeight: 17,
   },
-
-  // Auto Protection Banner
-  autoProtectBanner: {
+  protectionBar: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.card,
-    borderRadius: Radius.lg,
-    padding: Spacing.three,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    marginBottom: Spacing.three,
-  },
-  autoProtectInfo: {
-    flex: 1,
-    marginRight: Spacing.two,
-  },
-  autoProtectTitleRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    padding: Spacing.four,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
   },
-  pulsingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  protectionInfo: {
+    flex: 1,
+    marginRight: Spacing.three,
+    gap: 2,
   },
-  autoProtectTitle: {
+  protectionTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.textPrimary,
   },
-  autoProtectSubtitle: {
+  protectionDesc: {
     fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 4,
-    lineHeight: 16,
   },
-
-  // Input Card
-  inputCard: {
-    backgroundColor: colors.card,
-    borderRadius: Radius.lg,
+  inputPanel: {
     padding: Spacing.four,
+    borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    marginBottom: Spacing.three,
+    gap: Spacing.three,
   },
-  inputCardHeader: {
+  inputHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.two,
-    gap: Spacing.two,
   },
   inputLabel: {
     fontSize: 10,
-    fontWeight: '700',
-    color: colors.textMuted,
+    fontWeight: '800',
     letterSpacing: 0.8,
-    flex: 1,
   },
   ocrButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: 'rgba(59,130,246,0.5)',
-    backgroundColor: 'rgba(59,130,246,0.08)',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: Radius.md,
-  },
-  ocrButtonDisabled: {
-    borderColor: colors.inputBorder,
-    backgroundColor: 'transparent',
   },
   ocrButtonText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: Palette.brand.primary,
-  },
-
-  // OCR Preview
-  ocrPreviewWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.inputBg,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: Radius.md,
-    marginBottom: Spacing.two,
-    borderWidth: 1,
-    borderColor: colors.inputBorder,
-  },
-  ocrPreviewText: {
-    flex: 1,
-    fontSize: 11,
     fontWeight: '600',
-    color: colors.textSecondary,
   },
-
-  // Text Input
   textInput: {
-    minHeight: 100,
-    backgroundColor: colors.inputBg,
+    minHeight: 90,
     borderRadius: Radius.md,
-    padding: Spacing.three,
-    fontSize: 14,
-    color: colors.textPrimary,
-    textAlignVertical: 'top',
     borderWidth: 1,
-    borderColor: colors.inputBorder,
-    lineHeight: 22,
+    padding: Spacing.three,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlignVertical: 'top',
   },
-
-  // Analyze Button — full width, tall
-  analyzeButton: {
+  actionRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  analyzeBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2563EB',
-    paddingVertical: 14,
+    gap: 6,
+    paddingVertical: 12,
     borderRadius: Radius.md,
-    gap: 8,
-    marginTop: Spacing.three,
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
   },
-  analyzeButtonDisabled: {
-    backgroundColor: Palette.surface.elevated,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  analyzeButtonText: {
+  analyzeBtnText: {
     color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '700',
-    fontSize: 15,
-    letterSpacing: 0.2,
   },
-
-  // Secondary action row
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: Spacing.two,
+  btnDisabled: {
+    opacity: 0.4,
   },
-  clipboardScanBtn: {
+  clipboardBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(59,130,246,0.4)',
-    backgroundColor: 'rgba(59,130,246,0.08)',
-    paddingVertical: 9,
-    paddingHorizontal: 14,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: 12,
     borderRadius: Radius.md,
-  },
-  clipboardScanBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Palette.brand.primary,
-  },
-  iconButton: {
-    padding: 10,
-    borderRadius: Radius.md,
-    backgroundColor: colors.inputBg,
     borderWidth: 1,
-    borderColor: colors.inputBorder,
   },
-
-  // Demo benchmark section
-  quickTestsContainer: {
-    marginBottom: Spacing.three,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: Spacing.two,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.divider,
-  },
-  testLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.textMuted,
-    letterSpacing: 1,
-  },
-  testHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: Spacing.two,
-  },
-  simulateIncomingBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderWidth: 1,
-    borderColor: 'rgba(59,130,246,0.35)',
-    backgroundColor: 'rgba(59,130,246,0.08)',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: Radius.full,
-  },
-  simulateIncomingText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Palette.brand.primary,
-  },
-  sampleButtonsRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-    paddingVertical: 2,
-    paddingHorizontal: 2,
-  },
-  sampleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-    backgroundColor: colors.card,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-  },
-  sampleButtonText: {
-    fontSize: 12,
+  clipboardBtnText: {
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.textSecondary,
+  },
+  sandboxSection: {
+    gap: Spacing.two,
+  },
+  sandboxLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  chipsScroll: {
+    gap: Spacing.two,
+  },
+  sampleChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  sampleChipText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

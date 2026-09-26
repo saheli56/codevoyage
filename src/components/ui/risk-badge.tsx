@@ -1,137 +1,93 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withSequence,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
-import { ShieldCheck, Warning, WarningOctagon, Info } from 'phosphor-react-native';
-import { Palette, Radius, Spacing } from '@/constants/theme';
+import { Palette, Radius } from '@/constants/theme';
 import { RiskLevel } from '@/types/security';
+import { ShieldCheck, ShieldWarning, Warning } from 'phosphor-react-native';
 
 interface RiskBadgeProps {
   level: RiskLevel;
   score?: number;
   size?: 'sm' | 'md' | 'lg';
-  animate?: boolean;
 }
 
-export function RiskBadge({ level, score, size = 'md', animate = true }: RiskBadgeProps) {
-  const glowAnim = useSharedValue(0.5);
+export function RiskBadge({ level, score, size = 'md' }: RiskBadgeProps) {
+  const isDangerous = level === 'DANGEROUS';
+  const isSuspicious = level === 'SUSPICIOUS';
 
-  const getTheme = () => {
-    switch (level) {
-      case 'SAFE':
-        return {
-          bg: 'rgba(34,211,238,0.1)',
-          border: 'rgba(34,211,238,0.3)',
-          text: Palette.risk.safe,
-          color: Palette.risk.safe,
-          glow: Palette.risk.safeGlow,
-          Icon: ShieldCheck,
-          label: 'SAFE',
-        };
-      case 'SUSPICIOUS':
-        return {
-          bg: 'rgba(251,191,36,0.1)',
-          border: 'rgba(251,191,36,0.3)',
-          text: Palette.risk.suspicious,
-          color: Palette.risk.suspicious,
-          glow: Palette.risk.suspiciousGlow,
-          Icon: Warning,
-          label: 'SUSPICIOUS',
-        };
-      case 'DANGEROUS':
-        return {
-          bg: 'rgba(248,113,113,0.12)',
-          border: 'rgba(248,113,113,0.4)',
-          text: Palette.risk.dangerous,
-          color: Palette.risk.dangerous,
-          glow: Palette.risk.dangerousGlow,
-          Icon: WarningOctagon,
-          label: 'DANGER',
-        };
-      default:
-        return {
-          bg: 'rgba(100,116,139,0.1)',
-          border: 'rgba(100,116,139,0.2)',
-          text: Palette.neutral.slate400,
-          color: Palette.neutral.slate500,
-          glow: 'transparent',
-          Icon: Info,
-          label: 'UNKNOWN',
-        };
-    }
-  };
+  const config = isDangerous
+    ? {
+        label: 'CRITICAL THREAT',
+        textColor: '#DC2626',
+        bgColor: 'rgba(220, 38, 38, 0.08)',
+        borderColor: 'rgba(220, 38, 38, 0.2)',
+        icon: <Warning size={size === 'sm' ? 12 : 14} color="#DC2626" weight="fill" />,
+      }
+    : isSuspicious
+    ? {
+        label: 'SUSPICIOUS',
+        textColor: '#D97706',
+        bgColor: 'rgba(217, 119, 6, 0.08)',
+        borderColor: 'rgba(217, 119, 6, 0.2)',
+        icon: <ShieldWarning size={size === 'sm' ? 12 : 14} color="#D97706" weight="fill" />,
+      }
+    : {
+        label: 'VERIFIED SAFE',
+        textColor: '#059669',
+        bgColor: 'rgba(5, 150, 105, 0.08)',
+        borderColor: 'rgba(5, 150, 105, 0.2)',
+        icon: <ShieldCheck size={size === 'sm' ? 12 : 14} color="#059669" weight="fill" />,
+      };
 
-  const theme = getTheme();
-
-  useEffect(() => {
-    if (animate && (level === 'DANGEROUS' || level === 'SUSPICIOUS')) {
-      glowAnim.value = withRepeat(
-        withSequence(
-          withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0.4, { duration: 900, easing: Easing.inOut(Easing.ease) })
-        ),
-        -1,
-        false
-      );
-    } else {
-      glowAnim.value = withTiming(0.6, { duration: 300 });
-    }
-  }, [level, animate]);
-
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glowAnim.value,
-  }));
-
-  const iconSize = size === 'sm' ? 13 : size === 'lg' ? 20 : 15;
-  const fontSize = size === 'sm' ? 10 : size === 'lg' ? 13 : 11;
-  const paddingV = size === 'sm' ? 4 : size === 'lg' ? 8 : 5;
-  const paddingH = size === 'sm' ? 8 : size === 'lg' ? 14 : 10;
+  const isSmall = size === 'sm';
 
   return (
-    <View style={[
-      styles.container,
-      {
-        backgroundColor: theme.bg,
-        borderColor: theme.border,
-        paddingVertical: paddingV,
-        paddingHorizontal: paddingH,
-      }
-    ]}>
-      <Animated.View style={glowStyle}>
-        <theme.Icon size={iconSize} color={theme.color} weight="fill" />
-      </Animated.View>
-      <Text style={[styles.text, { color: theme.text, fontSize }]}>
-        {theme.label}{score !== undefined ? `  ${score}` : ''}
+    <View
+      style={[
+        styles.badge,
+        {
+          backgroundColor: config.bgColor,
+          borderColor: config.borderColor,
+          paddingVertical: isSmall ? 3 : 5,
+          paddingHorizontal: isSmall ? 7 : 10,
+        },
+      ]}
+    >
+      {config.icon}
+      <Text
+        style={[
+          styles.text,
+          {
+            color: config.textColor,
+            fontSize: isSmall ? 10 : 11,
+          },
+        ]}
+      >
+        {config.label}
       </Text>
       {score !== undefined && (
-        <Text style={[styles.scoreUnit, { color: theme.text, fontSize: fontSize - 1 }]}>/100</Text>
+        <Text style={[styles.score, { color: config.textColor, fontSize: isSmall ? 10 : 11 }]}>
+          · {score}/100
+        </Text>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: Radius.full,
     gap: 5,
+    borderRadius: Radius.full,
+    borderWidth: 1,
     alignSelf: 'flex-start',
   },
   text: {
-    fontWeight: '800',
-    letterSpacing: 0.8,
+    fontWeight: '700',
+    letterSpacing: 0.4,
   },
-  scoreUnit: {
-    fontWeight: '500',
-    opacity: 0.7,
-    marginLeft: -3,
+  score: {
+    fontWeight: '800',
+    fontFamily: 'monospace',
   },
 });
