@@ -6,6 +6,9 @@ from datetime import datetime
 import re
 import math
 import io
+import urllib.request
+import urllib.error
+import http.client
 
 app = FastAPI(
     title="ScamShield Intelligence Engine API",
@@ -21,7 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-KNOWN_SUSPICIOUS_TLDS = {".xyz", ".top", ".buzz", ".work", ".click", ".club", ".online", ".site", ".ru", ".cn"}
+KNOWN_SUSPICIOUS_TLDS = {".xyz", ".top", ".buzz", ".work", ".click", ".club", ".online", ".site", ".ru", ".cn", ".link", ".live"}
 BANK_KEYWORDS = ["sbi", "hdfc", "icici", "axis", "paytm", "phonepe", "gpay", "kotak", "pnb", "bob"]
 URGENCY_KEYWORDS = [
     "account suspended", "kyc expired", "blocked immediately", "unauthorized transaction",
@@ -63,6 +66,21 @@ class OcrResponse(BaseModel):
     char_count: int
     analysis: AnalysisResponse
 
+class RedirectHop(BaseModel):
+    url: str
+    domain: str
+    status_code: int
+
+class UnrollUrlRequest(BaseModel):
+    url: str
+
+class UnrollUrlResponse(BaseModel):
+    initial_url: str
+    final_url: str
+    hops: List[RedirectHop]
+    has_redirect: bool
+    intermediate_domains: List[str]
+
 class EvaluationMetrics(BaseModel):
     model_name: str
     version: str
@@ -81,6 +99,74 @@ def extract_urls(text: str) -> List[str]:
 @app.get("/api/v1/health")
 def health_check():
     return {"status": "HEALTHY", "service": "ScamShield Threat API", "timestamp": datetime.utcnow().isoformat()}
+
+def resolve_url_redirects(start_url: str, max_hops: int = 6) -> UnrollUrlResponse:
+    target = start_url.strip()
+    if not (target.startswith("http://") or target.startswith("https://")):
+        target = f"http://{target}"
+
+    hops: List[RedirectHop] = []
+    current_url = target
+    visited = set()
+
+    class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+        def http_error_302(self, req, fp, code, msg, headers):
+            return fp
+        http_error_301 = http_error_302
+        http_error_303 = http_error_302
+        http_error_307 = http_error_302
+        http_error_308 = http_error_302
+
+    opener = urllib.request.build_opener(NoRedirectHandler)
+
+    for _ in range(max_hops):
+        if current_url in visited:
+            break
+        visited.add(current_url)
+
+        try:
+            req = urllib.request.Request(
+                current_url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            )
+            response = opener.open(req, timeout=3.5)
+            status_code = getattr(response, "status", getattr(response, "code", 200))
+
+            domain_match = re.search(r'https?://([^/]+)', current_url)
+            domain = domain_match.group(1).lower() if domain_match else current_url
+
+            hops.append(RedirectHop(url=current_url, domain=domain, status_code=status_code))
+
+            if status_code in (301, 302, 303, 307, 308):
+                location = response.headers.get("Location")
+                if location:
+                    if location.startswith("/"):
+                        base = re.match(r'(https?://[^/]+)', current_url)
+                        current_url = f"{base.group(1)}{location}" if base else location
+                    else:
+                        current_url = location
+                    continue
+            break
+        except Exception:
+            domain_match = re.search(r'https?://([^/]+)', current_url)
+            domain = domain_match.group(1).lower() if domain_match else current_url
+            hops.append(RedirectHop(url=current_url, domain=domain, status_code=0))
+            break
+
+    final_url = hops[-1].url if hops else target
+    all_domains = list(dict.fromkeys([h.domain for h in hops]))
+
+    return UnrollUrlResponse(
+        initial_url=start_url,
+        final_url=final_url,
+        hops=hops,
+        has_redirect=len(hops) > 1,
+        intermediate_domains=all_domains
+    )
+
+@app.post("/api/v1/analyze/unroll", response_model=UnrollUrlResponse)
+def unroll_url_endpoint(req: UnrollUrlRequest):
+    return resolve_url_redirects(req.url)
 
 def process_message_analysis(raw_text: str) -> AnalysisResponse:
     lower_text = raw_text.lower()
@@ -190,7 +276,6 @@ def analyze_message_endpoint(req: MessageAnalysisRequest):
 async def analyze_ocr_endpoint(file: UploadFile = File(...)):
     try:
         contents = await file.read()
-        # Extract plain text from image bytes using pytesseract / fallback regex OCR pipeline
         text = ""
         try:
             import pytesseract
@@ -198,11 +283,9 @@ async def analyze_ocr_endpoint(file: UploadFile = File(...)):
             image = Image.open(io.BytesIO(contents))
             text = pytesseract.image_to_string(image).strip()
         except Exception:
-            # Fallback if pytesseract binary is not installed locally on system
             pass
 
         if not text:
-            # Try basic utf-8 / binary string extraction for embedded URLs and text strings
             printable = re.findall(rb'[A-Za-z0-9\s.,:/?=@_-]{5,}', contents)
             extracted_fragments = [p.decode('latin1', errors='ignore') for p in printable if len(p) > 8]
             text = " ".join(extracted_fragments[:10]) if extracted_fragments else "Image uploaded. No clear legible text found."
@@ -219,10 +302,8 @@ async def analyze_ocr_endpoint(file: UploadFile = File(...)):
 @app.post("/api/v1/analyze/transaction", response_model=AnalysisResponse)
 def analyze_transaction_endpoint(req: TransactionAnalysisRequest):
     vpa = req.recipient_vpa.strip().lower()
-    note = (req.context_note or "").lower()
     score = 15
     signals: List[SignalModel] = []
-    actions = []
 
     if req.is_new_beneficiary:
         score += 20

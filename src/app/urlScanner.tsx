@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Globe, ArrowRight, Warning, Key } from 'phosphor-react-native';
+import { Globe, ArrowRight, Warning, Key, ArrowBendDownRight, ArrowsSplit } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { scanUrlWithVirusTotal, UrlScanResult } from '@/services/urlIntelligence';
 import { saveAnalysisResult } from '@/services/storageService';
@@ -23,9 +23,10 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { RiskBadge } from '@/components/ui/risk-badge';
 
 const DEMO_TARGETS = [
-  { label: 'Fake SBI Phish', url: 'http://sbi-kyc-verify.top/login' },
-  { label: 'Electricity Threat', url: 'http://bijli-bill-update.xyz/pay' },
-  { label: 'Official Portal', url: 'https://onlinesbi.sbi' },
+  { label: 'Cloaked Bit.ly Phish', url: 'https://tinyurl.com/sbi-verify-kyc' },
+  { label: 'Direct Phishing Link', url: 'http://sbi-kyc-verify.top/login' },
+  { label: 'Electricity Bill Threat', url: 'http://bijli-bill-update.xyz/pay' },
+  { label: 'Official Banking Site', url: 'https://onlinesbi.sbi' },
 ];
 
 export default function UrlScannerScreen() {
@@ -59,7 +60,7 @@ export default function UrlScannerScreen() {
         overallRisk: scanRes.overallRisk,
         riskScore: scanRes.riskScore,
         confidence: 0.95,
-        summary: `VirusTotal engine scanned ${scanRes.domain}: ${scanRes.maliciousCount} engines flagged malicious, ${scanRes.suspiciousCount} flagged suspicious.`,
+        summary: `ScamShield analyzed ${scanRes.domain}${scanRes.hasRedirect ? ` (Redirects to ${scanRes.finalDomain})` : ''}: ${scanRes.maliciousCount} engines flagged malicious, ${scanRes.suspiciousCount} flagged suspicious.`,
         signals: scanRes.signals,
         actions: [
           {
@@ -110,14 +111,14 @@ export default function UrlScannerScreen() {
             </View>
           </View>
           <Text style={[styles.tagline, { color: colors.textMuted }]}>
-            Multi-engine domain reputation & typo-squatting scanner
+            Multi-hop redirect unroller & domain reputation scanner
           </Text>
         </View>
 
         {/* Input Panel */}
         <View style={[styles.inputPanel, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={styles.panelTop}>
-            <Text style={[styles.panelLabel, { color: colors.textMuted }]}>TARGET URL / DOMAIN</Text>
+            <Text style={[styles.panelLabel, { color: colors.textMuted }]}>TARGET URL / SHORTENER</Text>
             <TouchableOpacity
               style={[
                 styles.configPill,
@@ -161,7 +162,7 @@ export default function UrlScannerScreen() {
                 color: colors.textPrimary,
               },
             ]}
-            placeholder="e.g. http://sbi-kyc-verify.top or https://example.com"
+            placeholder="e.g. tinyurl.com/xyz or http://sbi-kyc-verify.top"
             placeholderTextColor={colors.textMuted}
             value={urlInput}
             onChangeText={setUrlInput}
@@ -179,7 +180,7 @@ export default function UrlScannerScreen() {
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <>
-                <Text style={styles.scanBtnText}>Audit URL Reputation</Text>
+                <Text style={styles.scanBtnText}>Unroll & Audit URL Reputation</Text>
                 <ArrowRight size={14} color="#FFFFFF" weight="bold" />
               </>
             )}
@@ -214,11 +215,42 @@ export default function UrlScannerScreen() {
               <View style={styles.resultHeaderLeft}>
                 <Text style={[styles.resultKicker, { color: colors.textMuted }]}>AUDIT VERDICT</Text>
                 <Text style={[styles.targetUrlText, { color: colors.textPrimary }]} numberOfLines={1}>
-                  {result.url}
+                  {result.domain}
                 </Text>
               </View>
               <RiskBadge level={result.overallRisk} score={result.riskScore} size="md" />
             </View>
+
+            {/* Unrolled Redirect Chain (If Detected) */}
+            {result.hasRedirect && (
+              <View style={[styles.redirectTraceBox, { backgroundColor: isDark ? 'rgba(220, 38, 38, 0.08)' : 'rgba(220, 38, 38, 0.04)', borderColor: 'rgba(220, 38, 38, 0.2)' }]}>
+                <View style={styles.redirectHeader}>
+                  <ArrowsSplit size={14} color="#DC2626" weight="bold" />
+                  <Text style={styles.redirectTitle}>CLOAKED REDIRECT CHAIN UNROLLED</Text>
+                </View>
+
+                <View style={styles.hopsList}>
+                  {result.hops.map((hop, idx) => {
+                    const isFinal = idx === result.hops.length - 1;
+                    return (
+                      <View key={idx} style={styles.hopRow}>
+                        <View style={styles.hopIndex}>
+                          <Text style={styles.hopIndexText}>{idx + 1}</Text>
+                        </View>
+                        <View style={styles.hopInfo}>
+                          <Text style={[styles.hopDomain, { color: isFinal ? '#DC2626' : colors.textPrimary }]}>
+                            {hop.domain} {isFinal ? '(Final Landing Destination)' : '(HTTP 301/302 Redirect)'}
+                          </Text>
+                          <Text style={[styles.hopUrl, { color: colors.textMuted }]} numberOfLines={1}>
+                            {hop.url}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
 
             {/* Reputation Engines Breakdown */}
             <View style={styles.metricsRow}>
@@ -423,6 +455,59 @@ const styles = StyleSheet.create({
   targetUrlText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  redirectTraceBox: {
+    margin: Spacing.four,
+    padding: Spacing.three,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    gap: Spacing.two,
+  },
+  redirectHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  redirectTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    color: '#DC2626',
+  },
+  hopsList: {
+    gap: Spacing.two,
+    marginTop: 2,
+  },
+  hopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  hopIndex: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(220, 38, 38, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  hopIndexText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  hopInfo: {
+    flex: 1,
+  },
+  hopDomain: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  hopUrl: {
+    fontSize: 11,
+    fontFamily: 'monospace',
+    marginTop: 1,
   },
   metricsRow: {
     flexDirection: 'row',

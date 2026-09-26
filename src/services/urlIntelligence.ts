@@ -1,8 +1,18 @@
 import { EvidenceSignal, RiskLevel } from '@/types/security';
 
+export interface RedirectHop {
+  url: string;
+  domain: string;
+  statusCode?: number;
+}
+
 export interface UrlScanResult {
   url: string;
   domain: string;
+  finalUrl: string;
+  finalDomain: string;
+  hops: RedirectHop[];
+  hasRedirect: boolean;
   source: 'VIRUSTOTAL' | 'OPENPHISH_HEURISTICS' | 'GOOGLE_SAFE_BROWSING_FALLBACK';
   overallRisk: RiskLevel;
   riskScore: number;
@@ -21,6 +31,7 @@ export interface UrlScanResult {
 
 const KNOWN_SUSPICIOUS_TLDS = ['.xyz', '.top', '.buzz', '.work', '.click', '.club', '.online', '.site', '.ru', '.cn', '.link', '.live'];
 const HIGH_VALUE_BRANDS = ['sbi', 'hdfc', 'icici', 'axis', 'paytm', 'phonepe', 'google', 'microsoft', 'netflix', 'amazon', 'kotak', 'pnb'];
+const URL_SHORTENERS = ['bit.ly', 'tinyurl.com', 't.co', 'cutt.ly', 'is.gd', 'rb.gy', 'goo.gl', 'ow.ly', 'buff.ly'];
 
 function encodeUrlForVirusTotal(url: string): string {
   const cleanUrl = url.trim();
@@ -33,11 +44,9 @@ function encodeUrlForVirusTotal(url: string): string {
     output += map.charAt(63 & block >> 8 - i % 1 * 8)) {
 
     charCode = str.charCodeAt(i += 3/4);
-
     if (charCode > 0xFF) {
-      throw new Error("'btoa' failed: The string to be encoded contains characters outside of the Latin1 range.");
+      throw new Error("'btoa' failed: String contains characters outside Latin1.");
     }
-
     block = block << 8 | charCode;
   }
 
@@ -56,21 +65,113 @@ export function parseDomainFromUrl(rawUrl: string): string {
   }
 }
 
-export async function scanUrlWithVirusTotal(url: string, apiKey?: string): Promise<UrlScanResult> {
-  const domain = parseDomainFromUrl(url);
-  const signals: EvidenceSignal[] = [];
-  const isIpHost = /(?:[0-9]{1,3}\.){3}[0-9]{1,3}/.test(domain);
-  const hasSuspiciousTld = KNOWN_SUSPICIOUS_TLDS.some(tld => domain.endsWith(tld));
-  const typosquatMatch = HIGH_VALUE_BRANDS.find(brand => domain.includes(brand) && !domain.endsWith(`${brand}.com`) && !domain.endsWith(`${brand}.co.in`));
+/**
+ * Headless Multi-Hop Redirect Unroller
+ * Resolves shorteners and intermediate redirects to uncover the real landing destination.
+ */
+export async function unrollRedirectChain(initialUrl: string): Promise<{ finalUrl: string; hops: RedirectHop[]; hasRedirect: boolean }> {
+  let target = initialUrl.trim();
+  if (!target.startsWith('http://') && !target.startsWith('https://')) {
+    target = `http://${target}`;
+  }
 
-  // If live VirusTotal API Key provided, query VT v3 API
+  const initialDomain = parseDomainFromUrl(target);
+  const hops: RedirectHop[] = [{ url: target, domain: initialDomain, statusCode: 200 }];
+
+  // 1. Try Backend Resolver if online
+  try {
+    const apiRes = await fetch('http://localhost:8000/api/v1/analyze/unroll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: target }),
+    });
+
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      if (data.hops && data.hops.length > 0) {
+        return {
+          finalUrl: data.final_url,
+          hops: data.hops.map((h: any) => ({ url: h.url, domain: h.domain, statusCode: h.status_code })),
+          hasRedirect: data.has_redirect,
+        };
+      }
+    }
+  } catch {
+    // Backend not reached, fall back to client-side follow-redirect fetch
+  }
+
+  // 2. Client-Side HTTP Follow
+  try {
+    const response = await fetch(target, {
+      method: 'HEAD',
+      redirect: 'follow',
+    });
+
+    const finalUrl = response.url || target;
+    const finalDomain = parseDomainFromUrl(finalUrl);
+
+    if (finalUrl !== target) {
+      hops.push({
+        url: finalUrl,
+        domain: finalDomain,
+        statusCode: response.status,
+      });
+      return {
+        finalUrl,
+        hops,
+        hasRedirect: true,
+      };
+    }
+  } catch {
+    // If fetch blocked by CORS or network, return initial hop
+  }
+
+  return {
+    finalUrl: target,
+    hops,
+    hasRedirect: false,
+  };
+}
+
+export async function scanUrlWithVirusTotal(url: string, apiKey?: string): Promise<UrlScanResult> {
+  // Step 1: Unroll redirects before scanning
+  const { finalUrl, hops, hasRedirect } = await unrollRedirectChain(url);
+
+  const initialDomain = parseDomainFromUrl(url);
+  const finalDomain = parseDomainFromUrl(finalUrl);
+
+  const signals: EvidenceSignal[] = [];
+  const threatCategories: string[] = [];
+
+  // Check if initial domain was a shortener / redirector
+  const isShortener = URL_SHORTENERS.some((s) => initialDomain.includes(s));
+  if (hasRedirect || isShortener) {
+    threatCategories.push('Cloaked / Redirected Link');
+    signals.push({
+      id: 'cloaked-redirect',
+      category: 'MALICIOUS_URL',
+      title: 'Multi-Hop Cloaked Redirect Detected',
+      description: `Initial link (${initialDomain}) redirects to final landing domain: "${finalDomain}".`,
+      severity: isShortener ? 'MEDIUM' : 'HIGH',
+      verified: true,
+      observedValue: `${hops.length} Hops -> ${finalDomain}`,
+    });
+  }
+
+  const isIpHost = /(?:[0-9]{1,3}\.){3}[0-9]{1,3}/.test(finalDomain);
+  const hasSuspiciousTld = KNOWN_SUSPICIOUS_TLDS.some((tld) => finalDomain.endsWith(tld));
+  const typosquatMatch = HIGH_VALUE_BRANDS.find(
+    (brand) => finalDomain.includes(brand) && !finalDomain.endsWith(`${brand}.com`) && !finalDomain.endsWith(`${brand}.co.in`)
+  );
+
+  // Step 2: If live VirusTotal API Key provided, scan the FINAL effective landing URL
   if (apiKey && apiKey.trim().length > 10) {
     try {
-      const urlId = encodeUrlForVirusTotal(url);
+      const urlId = encodeUrlForVirusTotal(finalUrl);
       const res = await fetch(`https://www.virustotal.com/api/v3/urls/${urlId}`, {
         headers: {
-          'x-apikey': apiKey.trim()
-        }
+          'x-apikey': apiKey.trim(),
+        },
       });
 
       if (res.ok) {
@@ -91,16 +192,20 @@ export async function scanUrlWithVirusTotal(url: string, apiKey?: string): Promi
             id: 'vt-flagged',
             category: 'MALICIOUS_URL',
             title: `VirusTotal Multi-Engine Flag (${malicious}/${total} Engines)`,
-            description: `Flagged by security vendor engines as phishing/malware distribution host.`,
+            description: `Final landing destination flagged by security vendor engines as malicious/phishing host.`,
             severity: malicious >= 2 ? 'CRITICAL' : 'HIGH',
             verified: true,
-            observedValue: `${malicious} Malicious hits`
+            observedValue: `${malicious} Malicious hits`,
           });
         }
 
         return {
           url,
-          domain,
+          domain: initialDomain,
+          finalUrl,
+          finalDomain,
+          hops,
+          hasRedirect,
           source: 'VIRUSTOTAL',
           overallRisk,
           riskScore,
@@ -110,21 +215,24 @@ export async function scanUrlWithVirusTotal(url: string, apiKey?: string): Promi
           totalEngines: total || 70,
           signals,
           scanDetails: {
-            threatCategories: json.data?.attributes?.categories ? Object.values(json.data.attributes.categories) : [],
+            threatCategories: json.data?.attributes?.categories ? Object.values(json.data.attributes.categories) : threatCategories,
             isIpHost,
             hasSuspiciousTld,
-            typosquatTarget: typosquatMatch
-          }
+            typosquatTarget: typosquatMatch,
+          },
         };
       }
     } catch {
-      // Gracefully fall back to on-device zero-latency heuristic pipeline
+      // Fallback
     }
   }
 
-  // Fallback: Advanced On-Device Lexical & Brand Typosquatting Analyzer
+  // Step 3: Fallback On-Device Lexical & Brand Analyzer on Final Domain
   let computedScore = 15;
-  const threatCategories: string[] = [];
+
+  if (hasRedirect && (hasSuspiciousTld || isIpHost || typosquatMatch)) {
+    computedScore += 35; // Compound penalty for cloaked scam redirect
+  }
 
   if (isIpHost) {
     computedScore += 45;
@@ -133,10 +241,10 @@ export async function scanUrlWithVirusTotal(url: string, apiKey?: string): Promi
       id: 'bare-ip-host',
       category: 'MALICIOUS_URL',
       title: 'Direct Numeric IP Address Host',
-      description: `Domain uses a raw IP address (${domain}) rather than an authenticated corporate domain name.`,
+      description: `Final destination uses a raw IP address (${finalDomain}) rather than an authenticated corporate domain name.`,
       severity: 'CRITICAL',
       verified: true,
-      observedValue: domain
+      observedValue: finalDomain,
     });
   }
 
@@ -147,10 +255,10 @@ export async function scanUrlWithVirusTotal(url: string, apiKey?: string): Promi
       id: 'high-risk-tld',
       category: 'TYPOSQUATTING',
       title: 'High-Risk TLD Registry',
-      description: `The domain is registered under a top-level domain frequently used for disposable phishing infrastructure.`,
+      description: `Destination domain "${finalDomain}" is registered under a top-level domain frequently used for disposable phishing infrastructure.`,
       severity: 'HIGH',
       verified: true,
-      observedValue: domain
+      observedValue: finalDomain,
     });
   }
 
@@ -161,10 +269,10 @@ export async function scanUrlWithVirusTotal(url: string, apiKey?: string): Promi
       id: 'typosquat-flag',
       category: 'IMPERSONATION',
       title: `Typosquatting of ${typosquatMatch.toUpperCase()}`,
-      description: `URL contains brand keywords for "${typosquatMatch.toUpperCase()}" but does not belong to their verified root domain.`,
+      description: `Destination URL contains brand keywords for "${typosquatMatch.toUpperCase()}" but does not belong to their verified root domain.`,
       severity: 'CRITICAL',
       verified: true,
-      observedValue: domain
+      observedValue: finalDomain,
     });
   }
 
@@ -173,7 +281,11 @@ export async function scanUrlWithVirusTotal(url: string, apiKey?: string): Promi
 
   return {
     url,
-    domain,
+    domain: initialDomain,
+    finalUrl,
+    finalDomain,
+    hops,
+    hasRedirect,
     source: 'OPENPHISH_HEURISTICS',
     overallRisk,
     riskScore: finalScore,
@@ -186,7 +298,7 @@ export async function scanUrlWithVirusTotal(url: string, apiKey?: string): Promi
       threatCategories,
       isIpHost,
       hasSuspiciousTld,
-      typosquatTarget: typosquatMatch
-    }
+      typosquatTarget: typosquatMatch,
+    },
   };
 }
