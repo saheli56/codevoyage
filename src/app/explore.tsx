@@ -6,6 +6,7 @@ import { Palette, Radius, Spacing } from '@/constants/theme';
 import { analyzePaymentRisk } from '@/services/paymentAnalyzer';
 import { saveAnalysisResult } from '@/services/storageService';
 import { useAppMode } from '@/context/AppModeContext';
+import { ModeBadge } from '@/components/ui/mode-badge';
 import { AnalysisResult } from '@/types/security';
 import { EvidenceCard } from '@/components/ui/evidence-card';
 
@@ -70,9 +71,12 @@ export default function PaymentRiskScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <View style={styles.badgeRow}>
-            <CurrencyInr size={22} color={Palette.brand.primary} weight="bold" />
-            <Text style={styles.screenTitle}>Payment Risk Simulator</Text>
+          <View style={styles.topRow}>
+            <View style={styles.badgeRow}>
+              <CurrencyInr size={22} color={Palette.brand.primary} weight="bold" />
+              <Text style={styles.screenTitle}>Payment Risk Simulator</Text>
+            </View>
+            <ModeBadge />
           </View>
           <Text style={styles.screenSubtitle}>
             Pre-flight transaction screening before authorizing UPI or NetBanking transfers.
@@ -148,7 +152,7 @@ export default function PaymentRiskScreen() {
 
         {isDemoMode && (
           <View style={styles.quickTestsContainer}>
-            <Text style={styles.testLabel}>SIMULATE RISK SCENARIO</Text>
+            <Text style={styles.testLabel}>SIMULATE RISK SCENARIO (DEMO MODE)</Text>
             <TouchableOpacity style={styles.simButton} onPress={loadSimulatedScam}>
               <WarningCircle size={16} color={Palette.risk.dangerous} weight="bold" />
               <Text style={styles.simButtonText}>Load High-Risk Advance-Fee Vector</Text>
@@ -175,6 +179,11 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: Spacing.three,
     marginTop: Spacing.two,
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   badgeRow: {
     flexDirection: 'row',

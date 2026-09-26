@@ -5,6 +5,7 @@ import { Globe, ShieldCheck, Warning, WarningOctagon, Sparkle, Key, ShieldPlus }
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { scanUrlWithVirusTotal, UrlScanResult } from '@/services/urlIntelligence';
 import { useAppMode } from '@/context/AppModeContext';
+import { ModeBadge } from '@/components/ui/mode-badge';
 import { RiskBadge } from '@/components/ui/risk-badge';
 
 export default function UrlScannerScreen() {
@@ -41,9 +42,12 @@ export default function UrlScannerScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <View style={styles.titleRow}>
-            <Globe size={22} color={Palette.brand.primary} weight="bold" />
-            <Text style={styles.screenTitle}>URL & Phishing Inspector</Text>
+          <View style={styles.topRow}>
+            <View style={styles.titleRow}>
+              <Globe size={22} color={Palette.brand.primary} weight="bold" />
+              <Text style={styles.screenTitle}>URL & Phishing Inspector</Text>
+            </View>
+            <ModeBadge />
           </View>
           <Text style={styles.screenSubtitle}>
             VirusTotal multi-engine security scanning & typosquatting detection.
@@ -194,6 +198,11 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: Spacing.three,
     marginTop: Spacing.two,
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   titleRow: {
     flexDirection: 'row',

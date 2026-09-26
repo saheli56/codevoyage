@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BellRinging, ShieldWarning, ShieldCheck, Lightning, ChatCircleDots, DeviceMobile, CreditCard, Trash } from 'phosphor-react-native';
+import { BellRinging, ShieldWarning, ShieldCheck, Lightning, ChatCircleDots, DeviceMobile, CreditCard, Trash, ShieldSlash } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { InterceptedNotification, getLiveNotificationFeed, pushInterceptedNotification, clearLiveFeed } from '@/services/liveNotificationFeed';
 import { useAppMode } from '@/context/AppModeContext';
+import { ModeBadge } from '@/components/ui/mode-badge';
 import { RiskBadge } from '@/components/ui/risk-badge';
 
 export default function LiveFeedScreen() {
@@ -17,14 +18,14 @@ export default function LiveFeedScreen() {
 
   const fetchFeed = async () => {
     setRefreshing(true);
-    const data = await getLiveNotificationFeed();
+    const data = await getLiveNotificationFeed(isDemoMode);
     setFeed(data);
     setRefreshing(false);
   };
 
   useEffect(() => {
     fetchFeed();
-  }, []);
+  }, [isDemoMode]);
 
   const handleSimulateNewIncoming = async (type: 'DANGEROUS' | 'SAFE') => {
     if (type === 'DANGEROUS') {
@@ -132,19 +133,18 @@ export default function LiveFeedScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.topBar}>
-        <View>
-          <View style={styles.titleRow}>
+        <View style={styles.titleRow}>
+          <View style={styles.titleGroup}>
             <BellRinging size={20} color={Palette.brand.primary} weight="bold" />
             <Text style={styles.heading}>Live Protection Inbox</Text>
           </View>
-          <Text style={styles.subheading}>Real-time incoming SMS & app notifications stream</Text>
+          <ModeBadge />
         </View>
-
-        {feed.length > 0 && (
-          <TouchableOpacity style={styles.clearIconBtn} onPress={handleClear}>
-            <Trash size={16} color={Palette.neutral.slate500} />
-          </TouchableOpacity>
-        )}
+        <Text style={styles.subheading}>
+          {isDemoMode 
+            ? 'Demonstration stream with simulated carriers' 
+            : 'Live background stream from real device notifications'}
+        </Text>
       </View>
 
       <View style={styles.filterBar}>
@@ -199,14 +199,26 @@ export default function LiveFeedScreen() {
         </View>
       )}
 
-      <FlatList
-        data={filteredFeed}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 90 }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchFeed} />}
-        showsVerticalScrollIndicator={false}
-      />
+      {filteredFeed.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <ShieldCheck size={44} color={Palette.neutral.slate300} />
+          <Text style={styles.emptyTitle}>Live Protection Inbox Clear</Text>
+          <Text style={styles.emptySubtext}>
+            {isDemoMode 
+              ? 'No notifications in stream. Use the simulator above to inject test alerts.'
+              : 'Zero unverified or suspicious notifications intercepted. Active Protection Shield is running.'}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredFeed}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 90 }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchFeed} />}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </View>
   );
 }
@@ -217,9 +229,6 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.neutral.slate50,
   },
   topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
     backgroundColor: '#FFFFFF',
@@ -227,6 +236,11 @@ const styles = StyleSheet.create({
     borderBottomColor: Palette.neutral.slate200,
   },
   titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  titleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
@@ -241,11 +255,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Palette.neutral.slate500,
     marginTop: 2,
-  },
-  clearIconBtn: {
-    padding: Spacing.one,
-    backgroundColor: Palette.neutral.slate100,
-    borderRadius: Radius.full,
   },
   filterBar: {
     flexDirection: 'row',
@@ -443,5 +452,24 @@ const styles = StyleSheet.create({
   signalDesc: {
     fontSize: 10,
     color: Palette.neutral.slate600,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.six,
+    marginTop: Spacing.six,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Palette.neutral.slate700,
+    marginTop: Spacing.three,
+  },
+  emptySubtext: {
+    fontSize: 12,
+    color: Palette.neutral.slate400,
+    textAlign: 'center',
+    marginTop: Spacing.one,
+    lineHeight: 18,
   }
 });

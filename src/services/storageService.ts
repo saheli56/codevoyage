@@ -6,7 +6,7 @@ const STORAGE_KEYS = {
   REPORTS: '@scamshield_community_reports',
 } as const;
 
-const INITIAL_COMMUNITY_REPORTS: CommunityReport[] = [
+export const INITIAL_COMMUNITY_REPORTS: CommunityReport[] = [
   {
     id: 'rep-1',
     category: 'SMISHING',
@@ -69,30 +69,38 @@ export async function clearAnalysisHistory(): Promise<void> {
   }
 }
 
-export async function getCommunityReports(): Promise<CommunityReport[]> {
+export async function getCommunityReports(isDemoMode: boolean = true): Promise<CommunityReport[]> {
   try {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.REPORTS);
     if (!data) {
-      await AsyncStorage.setItem(STORAGE_KEYS.REPORTS, JSON.stringify(INITIAL_COMMUNITY_REPORTS));
-      return INITIAL_COMMUNITY_REPORTS;
+      if (isDemoMode) {
+        await AsyncStorage.setItem(STORAGE_KEYS.REPORTS, JSON.stringify(INITIAL_COMMUNITY_REPORTS));
+        return INITIAL_COMMUNITY_REPORTS;
+      }
+      return [];
     }
-    return JSON.parse(data);
+    const parsed: CommunityReport[] = JSON.parse(data);
+    if (!isDemoMode) {
+      // Filter out seed demo IDs in live production mode
+      return parsed.filter(r => !r.id.startsWith('rep-1') && !r.id.startsWith('rep-2') && !r.id.startsWith('rep-3'));
+    }
+    return parsed;
   } catch {
-    return INITIAL_COMMUNITY_REPORTS;
+    return isDemoMode ? INITIAL_COMMUNITY_REPORTS : [];
   }
 }
 
 export async function submitCommunityReport(report: Omit<CommunityReport, 'id' | 'reportedAt' | 'upvotes' | 'status'>): Promise<CommunityReport> {
   const newReport: CommunityReport = {
     ...report,
-    id: `rep-${Date.now()}`,
+    id: `user-rep-${Date.now()}`,
     reportedAt: new Date().toISOString(),
     upvotes: 1,
     status: 'PENDING_REVIEW'
   };
 
   try {
-    const current = await getCommunityReports();
+    const current = await getCommunityReports(true);
     const updated = [newReport, ...current];
     await AsyncStorage.setItem(STORAGE_KEYS.REPORTS, JSON.stringify(updated));
   } catch {
@@ -104,7 +112,7 @@ export async function submitCommunityReport(report: Omit<CommunityReport, 'id' |
 
 export async function upvoteReport(reportId: string): Promise<void> {
   try {
-    const current = await getCommunityReports();
+    const current = await getCommunityReports(true);
     const updated = current.map(item => item.id === reportId ? { ...item, upvotes: item.upvotes + 1 } : item);
     await AsyncStorage.setItem(STORAGE_KEYS.REPORTS, JSON.stringify(updated));
   } catch {

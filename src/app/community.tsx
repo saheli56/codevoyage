@@ -1,28 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { UsersThree, Plus, ThumbsUp, ShieldCheck, Clock, Warning } from 'phosphor-react-native';
+import { UsersThree, Plus, ThumbsUp, ShieldCheck, Clock, Warning, ShieldSlash } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { CommunityReport } from '@/types/security';
 import { getCommunityReports, upvoteReport } from '@/services/storageService';
+import { useAppMode } from '@/context/AppModeContext';
+import { ModeBadge } from '@/components/ui/mode-badge';
 import { ReportModal } from '@/components/ui/report-modal';
 
 export default function CommunityFeedScreen() {
   const insets = useSafeAreaInsets();
+  const { isDemoMode } = useAppMode();
   const [reports, setReports] = useState<CommunityReport[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fetchReports = async () => {
     setRefreshing(true);
-    const data = await getCommunityReports();
+    const data = await getCommunityReports(isDemoMode);
     setReports(data);
     setRefreshing(false);
   };
 
   useEffect(() => {
     fetchReports();
-  }, []);
+  }, [isDemoMode]);
 
   const handleUpvote = async (id: string) => {
     await upvoteReport(id);
@@ -83,28 +86,48 @@ export default function CommunityFeedScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.topBar}>
-        <View>
+        <View style={styles.topRow}>
           <View style={styles.titleRow}>
             <UsersThree size={22} color={Palette.brand.primary} weight="bold" />
             <Text style={styles.heading}>Community Intel Feed</Text>
           </View>
-          <Text style={styles.subheading}>Crowdsourced verified scam alerts & indicators</Text>
+          <ModeBadge />
         </View>
-
-        <TouchableOpacity style={styles.reportBtn} onPress={() => setIsModalOpen(true)}>
-          <Plus size={16} color="#FFFFFF" weight="bold" />
-          <Text style={styles.reportBtnText}>Report Scam</Text>
-        </TouchableOpacity>
+        <View style={styles.subtitleRow}>
+          <Text style={styles.subheading}>
+            {isDemoMode 
+              ? 'Crowdsourced verified scam alerts & seed threats' 
+              : 'Live decentralized community threat feed'}
+          </Text>
+          <TouchableOpacity style={styles.reportBtn} onPress={() => setIsModalOpen(true)}>
+            <Plus size={14} color="#FFFFFF" weight="bold" />
+            <Text style={styles.reportBtnText}>Report Scam</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <FlatList
-        data={reports}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 80 }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchReports} />}
-        showsVerticalScrollIndicator={false}
-      />
+      {reports.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <UsersThree size={44} color={Palette.neutral.slate300} />
+          <Text style={styles.emptyTitle}>No Community Reports Yet</Text>
+          <Text style={styles.emptySubtext}>
+            In Live Mode, all pre-seeded dummy reports are hidden. Be the first to report an active threat!
+          </Text>
+          <TouchableOpacity style={styles.emptyReportBtn} onPress={() => setIsModalOpen(true)}>
+            <Plus size={16} color="#FFFFFF" weight="bold" />
+            <Text style={styles.emptyReportBtnText}>Submit First Report</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={reports}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 90 }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchReports} />}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
 
       <ReportModal
         visible={isModalOpen}
@@ -121,14 +144,17 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.neutral.slate50,
   },
   topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: Palette.neutral.slate200,
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.one,
   },
   titleRow: {
     flexDirection: 'row',
@@ -141,22 +167,28 @@ const styles = StyleSheet.create({
     color: Palette.neutral.slate900,
     letterSpacing: -0.3,
   },
+  subtitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   subheading: {
     fontSize: 11,
     color: Palette.neutral.slate500,
-    marginTop: 2,
+    flex: 1,
+    marginRight: Spacing.two,
   },
   reportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: Palette.brand.primary,
-    paddingVertical: 8,
-    paddingHorizontal: Spacing.three,
+    paddingVertical: 6,
+    paddingHorizontal: Spacing.two,
     borderRadius: Radius.full,
   },
   reportBtnText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#FFFFFF',
   },
@@ -273,5 +305,39 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: Palette.brand.primaryDark,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.six,
+    marginTop: Spacing.six,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Palette.neutral.slate700,
+    marginTop: Spacing.three,
+  },
+  emptySubtext: {
+    fontSize: 12,
+    color: Palette.neutral.slate400,
+    textAlign: 'center',
+    marginTop: Spacing.one,
+    marginBottom: Spacing.four,
+    lineHeight: 18,
+  },
+  emptyReportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    backgroundColor: Palette.brand.primary,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.four,
+    borderRadius: Radius.md,
+  },
+  emptyReportBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   }
 });
