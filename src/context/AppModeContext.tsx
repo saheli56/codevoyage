@@ -11,16 +11,19 @@ interface AppModeContextType {
 const STORAGE_KEY_DEMO_MODE = '@scamshield_is_demo_mode';
 const STORAGE_KEY_VT_API_KEY = '@scamshield_vt_api_key';
 
+// Read from Expo public environment variable if available
+const ENV_API_KEY = process.env.EXPO_PUBLIC_VIRUSTOTAL_API_KEY || '';
+
 const AppModeContext = createContext<AppModeContextType>({
   isDemoMode: true,
   toggleDemoMode: async () => {},
-  virusTotalApiKey: '',
+  virusTotalApiKey: ENV_API_KEY,
   setVirusTotalApiKey: async () => {},
 });
 
 export function AppModeProvider({ children }: { children: React.ReactNode }) {
   const [isDemoMode, setIsDemoMode] = useState<boolean>(true);
-  const [virusTotalApiKey, setVtApiKey] = useState<string>('');
+  const [virusTotalApiKey, setVtApiKey] = useState<string>(ENV_API_KEY);
 
   useEffect(() => {
     (async () => {
@@ -32,6 +35,8 @@ export function AppModeProvider({ children }: { children: React.ReactNode }) {
         const storedKey = await AsyncStorage.getItem(STORAGE_KEY_VT_API_KEY);
         if (storedKey) {
           setVtApiKey(storedKey);
+        } else if (ENV_API_KEY) {
+          setVtApiKey(ENV_API_KEY);
         }
       } catch {
         // Fallback to default demo mode
