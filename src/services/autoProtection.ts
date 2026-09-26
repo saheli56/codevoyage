@@ -60,3 +60,34 @@ export async function simulateIncomingNotificationScan(mockSender: string, messa
   triggerThreatAlert(result, messageBody);
   return result;
 }
+import { addSmsListener, addNotificationListener } from '../../modules/scamshield-interceptor';
+
+export function startNativeInterception() {
+  if (Platform.OS !== 'android') return;
+
+  try {
+    addSmsListener(async (event) => {
+      const result = analyzeMessage(event.body);
+      if (result.overallRisk === 'DANGEROUS' || result.overallRisk === 'SUSPICIOUS') {
+        await saveAnalysisResult(result);
+        await pushInterceptedNotification('SMS', event.sender, event.body);
+        triggerThreatAlert(result, event.body);
+      }
+    });
+
+    addNotificationListener(async (event) => {
+      const combinedText = ` `.trim();
+      if (combinedText.length < 5) return;
+      if (event.packageName.includes('scamshield')) return;
+
+      const result = analyzeMessage(combinedText);
+      if (result.overallRisk === 'DANGEROUS' || result.overallRisk === 'SUSPICIOUS') {
+        await saveAnalysisResult(result);
+        await pushInterceptedNotification('WHATSAPP', event.title || event.packageName, event.text);
+        triggerThreatAlert(result, event.text);
+      }
+    });
+  } catch (e) {
+    console.log('Native interceptor not available (running in Expo Go)');
+  }
+}

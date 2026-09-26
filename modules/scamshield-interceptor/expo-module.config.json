@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["ScamshieldInterceptorModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.scamshieldinterceptor.ScamshieldInterceptorModule"]
+  }
+}

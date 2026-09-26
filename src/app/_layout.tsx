@@ -119,7 +119,14 @@ function TabNavigator() {
   );
 }
 
+import { startNativeInterception } from '@/services/autoProtection';
+import { useEffect } from 'react';
+
 export default function AppLayout() {
+  useEffect(() => {
+    startNativeInterception();
+  }, []);
+
   return (
     <ThemeProvider>
       <AppModeProvider>
