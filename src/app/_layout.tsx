@@ -2,7 +2,7 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ShieldCheck, CurrencyInr, UsersThree, ClockCounterClockwise, ChartBar } from 'phosphor-react-native';
+import { ShieldCheck, CurrencyInr, UsersThree, BellRinging, ChartBar } from 'phosphor-react-native';
 import { Palette } from '@/constants/theme';
 
 export default function TabLayout() {
@@ -43,6 +43,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="liveFeed"
+        options={{
+          title: 'Live Inbox',
+          tabBarIcon: ({ color }) => <BellRinging size={20} color={String(color)} weight="bold" />,
+        }}
+      />
+      <Tabs.Screen
         name="explore"
         options={{
           title: 'Payments',
@@ -57,17 +64,16 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="history"
-        options={{
-          title: 'History',
-          tabBarIcon: ({ color }) => <ClockCounterClockwise size={20} color={String(color)} weight="bold" />,
-        }}
-      />
-      <Tabs.Screen
         name="evaluation"
         options={{
           title: 'Metrics',
           tabBarIcon: ({ color }) => <ChartBar size={20} color={String(color)} weight="bold" />,
+        }}
+      />
+      <Tabs.Screen
+        name="history"
+        options={{
+          href: null,
         }}
       />
     </Tabs>
