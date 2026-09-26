@@ -1,14 +1,15 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
 from datetime import datetime
 import re
 import math
+import io
 
 app = FastAPI(
     title="ScamShield Intelligence Engine API",
-    description="Production-grade multi-signal scam detection, URL threat scoring, and transaction risk intelligence.",
+    description="Production-grade multi-signal scam detection, URL threat scoring, transaction risk intelligence, and OCR extraction.",
     version="1.0.0"
 )
 
@@ -57,6 +58,11 @@ class AnalysisResponse(BaseModel):
     signals: List[SignalModel]
     recommended_actions: List[dict]
 
+class OcrResponse(BaseModel):
+    extracted_text: str
+    char_count: int
+    analysis: AnalysisResponse
+
 class EvaluationMetrics(BaseModel):
     model_name: str
     version: str
@@ -76,12 +82,7 @@ def extract_urls(text: str) -> List[str]:
 def health_check():
     return {"status": "HEALTHY", "service": "ScamShield Threat API", "timestamp": datetime.utcnow().isoformat()}
 
-@app.post("/api/v1/analyze/message", response_model=AnalysisResponse)
-def analyze_message_endpoint(req: MessageAnalysisRequest):
-    raw_text = req.text.strip()
-    if not raw_text:
-        raise HTTPException(status_code=400, detail="Empty text provided.")
-
+def process_message_analysis(raw_text: str) -> AnalysisResponse:
     lower_text = raw_text.lower()
     urls = extract_urls(raw_text)
     signals: List[SignalModel] = []
@@ -177,6 +178,43 @@ def analyze_message_endpoint(req: MessageAnalysisRequest):
         signals=signals,
         recommended_actions=actions
     )
+
+@app.post("/api/v1/analyze/message", response_model=AnalysisResponse)
+def analyze_message_endpoint(req: MessageAnalysisRequest):
+    raw_text = req.text.strip()
+    if not raw_text:
+        raise HTTPException(status_code=400, detail="Empty text provided.")
+    return process_message_analysis(raw_text)
+
+@app.post("/api/v1/analyze/ocr", response_model=OcrResponse)
+async def analyze_ocr_endpoint(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        # Extract plain text from image bytes using pytesseract / fallback regex OCR pipeline
+        text = ""
+        try:
+            import pytesseract
+            from PIL import Image
+            image = Image.open(io.BytesIO(contents))
+            text = pytesseract.image_to_string(image).strip()
+        except Exception:
+            # Fallback if pytesseract binary is not installed locally on system
+            pass
+
+        if not text:
+            # Try basic utf-8 / binary string extraction for embedded URLs and text strings
+            printable = re.findall(rb'[A-Za-z0-9\s.,:/?=@_-]{5,}', contents)
+            extracted_fragments = [p.decode('latin1', errors='ignore') for p in printable if len(p) > 8]
+            text = " ".join(extracted_fragments[:10]) if extracted_fragments else "Image uploaded. No clear legible text found."
+
+        analysis = process_message_analysis(text)
+        return OcrResponse(
+            extracted_text=text,
+            char_count=len(text),
+            analysis=analysis
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OCR processing failed: {str(e)}")
 
 @app.post("/api/v1/analyze/transaction", response_model=AnalysisResponse)
 def analyze_transaction_endpoint(req: TransactionAnalysisRequest):

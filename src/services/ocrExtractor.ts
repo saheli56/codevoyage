@@ -45,22 +45,54 @@ export async function pickImageForAnalysis(): Promise<OcrExtractionResult | null
     const asset = result.assets[0];
     let recognizedText = '';
 
-    // If running in browser or Web runtime with worker support, execute real OCR via Tesseract.js
+    // 1. Try real browser Tesseract OCR if running on Web
     if (Platform.OS === 'web') {
       try {
         const Tesseract = await import('tesseract.js');
         const { data: { text } } = await Tesseract.recognize(asset.uri, 'eng');
-        if (text && text.trim().length > 5) {
+        if (text && text.trim().length > 3) {
           recognizedText = text.trim();
         }
       } catch (err) {
-        // Fallback gracefully to smart sample if worker is restricted in iframe/sandbox
+        console.warn('Browser Tesseract OCR worker unavailable:', err);
       }
     }
 
-    // Default fallback if OCR text is empty or on mobile Expo Go without webworkers
+    // 2. Try Backend FastAPI OCR Endpoint if available
     if (!recognizedText) {
-      recognizedText = OCR_SIMULATED_SAMPLES[0].text;
+      try {
+        const formData = new FormData();
+        if (Platform.OS === 'web') {
+          const fetchRes = await fetch(asset.uri);
+          const blob = await fetchRes.blob();
+          formData.append('file', blob, 'screenshot.png');
+        } else {
+          formData.append('file', {
+            uri: asset.uri,
+            name: 'screenshot.jpg',
+            type: 'image/jpeg',
+          } as any);
+        }
+
+        const apiRes = await fetch('http://localhost:8000/api/v1/analyze/ocr', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (apiRes.ok) {
+          const data = await apiRes.json();
+          if (data.extracted_text && data.extracted_text.trim().length > 3) {
+            recognizedText = data.extracted_text.trim();
+          }
+        }
+      } catch (err) {
+        // Backend offline or unreachable
+      }
+    }
+
+    // 3. Fallback: If no OCR text was extracted, notify user instead of hardcoding fake text
+    if (!recognizedText) {
+      recognizedText = 'Scanned image: No clear legible text characters or high-contrast letters found in this screenshot.';
     }
 
     const analysis = analyzeMessage(recognizedText);
