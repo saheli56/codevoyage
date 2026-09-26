@@ -102,12 +102,7 @@ function TabNavigator() {
         <Tabs.Screen
           name="evaluation"
           options={{
-            title: 'Metrics',
-            tabBarIcon: ({ color, focused }) => (
-              <View style={{ opacity: focused ? 1 : 0.7 }}>
-                <ChartBar size={21} color={String(color)} weight={focused ? 'fill' : 'regular'} />
-              </View>
-            ),
+            href: null,
           }}
         />
         <Tabs.Screen
