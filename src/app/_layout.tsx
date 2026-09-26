@@ -80,12 +80,7 @@ function TabNavigator() {
         <Tabs.Screen
           name="explore"
           options={{
-            title: 'Pay',
-            tabBarIcon: ({ color, focused }) => (
-              <View style={{ opacity: focused ? 1 : 0.7 }}>
-                <CurrencyInr size={21} color={String(color)} weight={focused ? 'fill' : 'regular'} />
-              </View>
-            ),
+            href: null,
           }}
         />
         <Tabs.Screen
