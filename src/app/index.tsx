@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Switch, AppState, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Shield, Sparkle, Trash, ClipboardText, Translate } from 'phosphor-react-native';
+import { Shield, Sparkle, Trash, ClipboardText, Translate, BellRinging, Lightning } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { analyzeMessage } from '@/services/riskEngine';
 import { saveAnalysisResult } from '@/services/storageService';
+import { checkClipboardForThreats, requestNotificationPermissions, simulateIncomingNotificationScan } from '@/services/autoProtection';
 import { AnalysisResult } from '@/types/security';
 import { EvidenceCard } from '@/components/ui/evidence-card';
 
@@ -16,6 +17,27 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [inputText, setInputText] = useState('');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [isAutoProtectionActive, setIsAutoProtectionActive] = useState(true);
+  const lastProcessedText = useRef('');
+
+  useEffect(() => {
+    requestNotificationPermissions();
+
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (nextAppState === 'active' && isAutoProtectionActive) {
+        const detected = await checkClipboardForThreats(lastProcessedText.current);
+        if (detected) {
+          lastProcessedText.current = detected.text;
+          setInputText(detected.text);
+          setAnalysisResult(detected.result);
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isAutoProtectionActive]);
 
   const handleAnalyze = async (textToAnalyze?: string) => {
     const target = textToAnalyze !== undefined ? textToAnalyze : inputText;
@@ -33,6 +55,18 @@ export default function HomeScreen() {
   const loadSample = (sample: string) => {
     setInputText(sample);
     handleAnalyze(sample);
+  };
+
+  const handleSimulateIncomingSms = async () => {
+    const simulatedText = 'VM-SBINB: Dear customer, your PAN is not linked to account XXXX4910. Netbanking deactivated. Link at http://sbi-pan-kyc.buzz immediately.';
+    setInputText(simulatedText);
+    const res = await simulateIncomingNotificationScan('VM-SBINB', simulatedText);
+    setAnalysisResult(res);
+    Alert.alert(
+      'Automated Threat Detected',
+      'An incoming smishing pattern from "VM-SBINB" was intercepted and categorized as DANGEROUS.',
+      [{ text: 'Inspect Evidence', style: 'default' }]
+    );
   };
 
   return (
@@ -53,7 +87,27 @@ export default function HomeScreen() {
             <Shield size={24} color={Palette.brand.primary} weight="fill" />
             <Text style={styles.appTitle}>ScamShield</Text>
           </View>
-          <Text style={styles.appSubtitle}>Multi-Signal Financial Threat & Scam Intelligence</Text>
+          <Text style={styles.appSubtitle}>Automated Financial Threat & Scam Intelligence</Text>
+        </View>
+
+        <View style={styles.autoProtectBanner}>
+          <View style={styles.autoProtectInfo}>
+            <View style={styles.autoProtectTitleRow}>
+              <BellRinging size={16} color={isAutoProtectionActive ? Palette.risk.safe : Palette.neutral.slate400} weight="bold" />
+              <Text style={styles.autoProtectTitle}>Active Protection Shield</Text>
+            </View>
+            <Text style={styles.autoProtectSubtitle}>
+              {isAutoProtectionActive 
+                ? 'Actively scanning incoming notifications & clipboard for fraud patterns' 
+                : 'Automated background scanning paused'}
+            </Text>
+          </View>
+          <Switch
+            value={isAutoProtectionActive}
+            onValueChange={setIsAutoProtectionActive}
+            trackColor={{ false: Palette.neutral.slate200, true: Palette.brand.primary }}
+            thumbColor="#FFFFFF"
+          />
         </View>
 
         <View style={styles.inputCard}>
@@ -87,7 +141,14 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.quickTestsContainer}>
-          <Text style={styles.testLabel}>BENCHMARK TEST VECTORS</Text>
+          <View style={styles.testHeaderRow}>
+            <Text style={styles.testLabel}>BENCHMARK SCENARIOS</Text>
+            <TouchableOpacity style={styles.simulateIncomingBtn} onPress={handleSimulateIncomingSms}>
+              <Lightning size={12} color={Palette.brand.primaryDark} weight="bold" />
+              <Text style={styles.simulateIncomingText}>Simulate Live SMS</Text>
+            </TouchableOpacity>
+          </View>
+
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sampleButtonsRow}>
             <TouchableOpacity 
               style={styles.sampleButton}
@@ -151,6 +212,36 @@ const styles = StyleSheet.create({
     color: Palette.neutral.slate500,
     marginTop: 2,
   },
+  autoProtectBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    padding: Spacing.three,
+    borderWidth: 1,
+    borderColor: Palette.neutral.slate200,
+    marginBottom: Spacing.three,
+  },
+  autoProtectInfo: {
+    flex: 1,
+    marginRight: Spacing.two,
+  },
+  autoProtectTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  autoProtectTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Palette.neutral.slate900,
+  },
+  autoProtectSubtitle: {
+    fontSize: 11,
+    color: Palette.neutral.slate500,
+    marginTop: 2,
+  },
   inputCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
@@ -210,12 +301,31 @@ const styles = StyleSheet.create({
   quickTestsContainer: {
     marginTop: Spacing.three,
   },
+  testHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.two,
+  },
   testLabel: {
     fontSize: 11,
     fontWeight: '700',
     color: Palette.neutral.slate400,
     letterSpacing: 0.8,
-    marginBottom: Spacing.two,
+  },
+  simulateIncomingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Palette.brand.primaryMuted,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: Radius.full,
+  },
+  simulateIncomingText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Palette.brand.primaryDark,
   },
   sampleButtonsRow: {
     flexDirection: 'row',
