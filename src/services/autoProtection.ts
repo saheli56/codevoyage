@@ -76,9 +76,9 @@ export function startNativeInterception() {
     });
 
     addNotificationListener(async (event) => {
-      const combinedText = ` `.trim();
+      const combinedText = `${event.title || ''} ${event.text || ''}`.trim();
       if (combinedText.length < 5) return;
-      if (event.packageName.includes('scamshield')) return;
+      if (event.packageName && event.packageName.includes('scamshield')) return;
 
       const result = analyzeMessage(combinedText);
       if (result.overallRisk === 'DANGEROUS' || result.overallRisk === 'SUSPICIOUS') {

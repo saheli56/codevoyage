@@ -1,11 +1,12 @@
 import { Tabs } from 'expo-router';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ShieldCheck, Globe, CurrencyInr, UsersThree, BellRinging, ChartBar } from 'phosphor-react-native';
+import { ShieldCheck, Globe, CurrencyInr, UsersThree, BellRinging, ChartBar, ClockCounterClockwise } from 'phosphor-react-native';
 import { Palette } from '@/constants/theme';
 import { AppModeProvider } from '@/context/AppModeContext';
 import { ThemeProvider, useAppTheme } from '@/context/ThemeContext';
+import { startNativeInterception } from '@/services/autoProtection';
 
 function TabNavigator() {
   const insets = useSafeAreaInsets();
@@ -112,15 +113,17 @@ function TabNavigator() {
         <Tabs.Screen
           name="history"
           options={{
-            href: null,
+            title: 'Logs',
+            tabBarIcon: ({ color, focused }) => (
+              <View style={{ opacity: focused ? 1 : 0.7 }}>
+                <ClockCounterClockwise size={21} color={String(color)} weight={focused ? 'fill' : 'regular'} />
+              </View>
+            ),
           }}
         />
       </Tabs>
   );
 }
-
-import { startNativeInterception } from '@/services/autoProtection';
-import { useEffect } from 'react';
 
 export default function AppLayout() {
   useEffect(() => {

@@ -1,184 +1,341 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ScamShield — Security Intelligence & Threat Moderation Operations</title>
+  <title>ScamShield — SOC & Threat Operations Center</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS & GSAP for world-class web animations -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#EFF6FF',
+              500: '#3B82F6',
+              600: '#2563EB',
+              700: '#1D4ED8',
+            },
+            surface: {
+              base: '#050911',
+              card: '#0D1424',
+              cardHover: '#111B30',
+              elevated: '#152038',
+              border: 'rgba(255, 255, 255, 0.08)',
+              borderHover: 'rgba(59, 130, 246, 0.35)',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
   <style>
-    body { background-color: #0B0F19; color: #F8FAFC; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    .threat-card-danger { border-left: 4px solid #EF4444; }
-    .threat-card-safe { border-left: 4px solid #10B981; }
-    .threat-card-warn { border-left: 4px solid #F59E0B; }
+    body {
+      background-color: #050911;
+      color: #F1F5F9;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      overflow-x: hidden;
+    }
+    .glass-panel {
+      background: rgba(13, 20, 36, 0.7);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .glass-panel-hover {
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .glass-panel-hover:hover {
+      background: rgba(17, 27, 48, 0.85);
+      border-color: rgba(59, 130, 246, 0.35);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.5), 0 0 20px -5px rgba(59, 130, 246, 0.15);
+    }
+    .glow-cyan {
+      box-shadow: 0 0 25px -5px rgba(34, 211, 238, 0.25);
+    }
+    .glow-red {
+      box-shadow: 0 0 25px -5px rgba(248, 113, 113, 0.25);
+    }
+    .threat-card-verified {
+      border-left: 3px solid #F87171;
+    }
+    .threat-card-pending {
+      border-left: 3px solid #FBBF24;
+    }
+    .threat-card-safe {
+      border-left: 3px solid #22D3EE;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #050911;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1E293B;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3B82F6;
+    }
   </style>
 </head>
-<body class="p-6 max-w-7xl mx-auto">
-  <!-- Top Navigation -->
-  <header class="flex flex-col md:flex-row justify-between items-start md:items-center pb-6 border-b border-slate-800 gap-4">
-    <div class="flex items-center gap-3">
-      <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-600/30">
-        <i class="ph-bold ph-shield-check text-2xl"></i>
-      </div>
-      <div>
-        <div class="flex items-center gap-2">
-          <h1 class="text-xl font-extrabold tracking-tight">ScamShield Threat Operations</h1>
-          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-950 text-blue-400 border border-blue-800 uppercase tracking-widest">SOC Level-1</span>
-        </div>
-        <p class="text-xs text-slate-400">Decentralized Financial Fraud Intelligence & Live Community Moderation</p>
-      </div>
-    </div>
+<body class="min-h-screen flex flex-col antialiased selection:bg-blue-600 selection:text-white">
 
-    <div class="flex items-center gap-3">
-      <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
-        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        <span class="text-slate-300 font-medium">FastAPI Engine Online</span>
+  <!-- Ambient Top Glow Beam -->
+  <div class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-32 bg-blue-600/10 blur-[120px] pointer-events-none -z-10"></div>
+
+  <!-- Top Global Navigation Bar -->
+  <header class="border-b border-surface-border sticky top-0 z-40 bg-[#050911]/80 backdrop-blur-xl">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand & Status -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-600/25">
+          <i class="ph-bold ph-shield-check text-2xl"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold text-base tracking-tight text-white">ScamShield</span>
+            <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-400 border border-blue-500/20">SOC Telemetry</span>
+          </div>
+          <p class="text-[11px] text-slate-400">Ensemble Fraud Defense & Threat Intelligence Hub</p>
+        </div>
       </div>
-      <button onclick="refreshData()" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition flex items-center gap-1.5">
-        <i class="ph-bold ph-arrows-clockwise"></i> Sync Live Data
-      </button>
+
+      <!-- Live Engine Controls -->
+      <div class="flex items-center gap-3">
+        <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-white/5 text-xs">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span class="text-slate-300 font-mono text-[11px]">Ensemble v1.4.2 Online</span>
+        </div>
+
+        <button id="sync-btn" onclick="triggerSync()" class="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-blue-600/20">
+          <i class="ph-bold ph-arrows-clockwise text-sm"></i>
+          <span>Sync Pipeline</span>
+        </button>
+      </div>
+
     </div>
   </header>
 
-  <!-- Metrics Grid -->
-  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-6">
-    <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80">
-      <div class="flex justify-between items-start">
-        <span class="text-xs font-bold text-slate-400 tracking-wider">ACTIVE THREAT SIGNATURES</span>
-        <i class="ph-bold ph-warning-octagon text-red-400 text-lg"></i>
-      </div>
-      <div class="text-2xl font-black mt-2 text-white" id="stat-threats">1,482</div>
-      <div class="text-[11px] text-red-400 font-medium mt-1">+14% smishing surge this week</div>
-    </div>
+  <!-- Main Dashboard Container -->
+  <div class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
-    <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80">
-      <div class="flex justify-between items-start">
-        <span class="text-xs font-bold text-slate-400 tracking-wider">ENSEMBLE F1-SCORE</span>
-        <i class="ph-bold ph-chart-bar text-blue-400 text-lg"></i>
-      </div>
-      <div class="text-2xl font-black mt-2 text-white">94.0%</div>
-      <div class="text-[11px] text-slate-400 font-medium mt-1">Evaluated on 2,500 real vectors</div>
-    </div>
-
-    <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80">
-      <div class="flex justify-between items-start">
-        <span class="text-xs font-bold text-slate-400 tracking-wider">INFERENCE LATENCY</span>
-        <i class="ph-bold ph-lightning text-amber-400 text-lg"></i>
-      </div>
-      <div class="text-2xl font-black mt-2 text-white">18.4ms</div>
-      <div class="text-[11px] text-emerald-400 font-medium mt-1">Sub-50ms SLA guaranteed</div>
-    </div>
-
-    <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80">
-      <div class="flex justify-between items-start">
-        <span class="text-xs font-bold text-slate-400 tracking-wider">COMMUNITY REPUTATION</span>
-        <i class="ph-bold ph-users-three text-emerald-400 text-lg"></i>
-      </div>
-      <div class="text-2xl font-black mt-2 text-white" id="stat-verifications">312</div>
-      <div class="text-[11px] text-slate-400 font-medium mt-1">Crowdsourced threat upvotes</div>
-    </div>
-  </section>
-
-  <!-- Main Moderation & Threat Feed Grid -->
-  <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <!-- Left Column: Community Moderation Queue (2 cols) -->
-    <div class="lg:col-span-2 space-y-4">
-      <div class="flex justify-between items-center bg-slate-900/40 p-3 rounded-xl border border-slate-800">
-        <h2 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-          <i class="ph-bold ph-clipboard-text text-blue-400"></i> Live Community Threat Moderation Queue
-        </h2>
-        <span class="text-xs text-slate-400 font-mono" id="pending-count">2 Pending Review</span>
-      </div>
-
-      <div id="reports-container" class="space-y-3">
-        <!-- Rendered via JS -->
-      </div>
-    </div>
-
-    <!-- Right Column: Model Performance & Typosquat Targets (1 col) -->
-    <div class="space-y-6">
-      <div class="p-5 rounded-xl bg-slate-900/60 border border-slate-800">
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-          <i class="ph-bold ph-shield-warning text-amber-400"></i> Top Target Entities (India)
-        </h3>
-        <div class="space-y-3">
-          <div>
-            <div class="flex justify-between text-xs font-semibold mb-1">
-              <span>State Bank of India (SBI)</span>
-              <span class="text-red-400 font-mono">42% Phishing share</span>
-            </div>
-            <div class="w-full bg-slate-800 rounded-full h-1.5">
-              <div class="bg-red-500 h-1.5 rounded-full" style="width: 42%"></div>
-            </div>
+    <!-- KPI Metric Cards Grid (Stagger Animated) -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="kpi-grid">
+      
+      <!-- Metric 1 -->
+      <div class="glass-panel glass-panel-hover p-4 rounded-2xl relative overflow-hidden">
+        <div class="flex justify-between items-start">
+          <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Total Analyzed Threats</span>
+          <div class="w-7 h-7 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400">
+            <i class="ph-bold ph-shield-warning text-base"></i>
           </div>
-
-          <div>
-            <div class="flex justify-between text-xs font-semibold mb-1">
-              <span>Electricity Board Utility Bills</span>
-              <span class="text-amber-400 font-mono">28% Phishing share</span>
-            </div>
-            <div class="w-full bg-slate-800 rounded-full h-1.5">
-              <div class="bg-amber-500 h-1.5 rounded-full" style="width: 28%"></div>
-            </div>
-          </div>
-
-          <div>
-            <div class="flex justify-between text-xs font-semibold mb-1">
-              <span>HDFC NetBanking & Credit Cards</span>
-              <span class="text-blue-400 font-mono">18% Phishing share</span>
-            </div>
-            <div class="w-full bg-slate-800 rounded-full h-1.5">
-              <div class="bg-blue-500 h-1.5 rounded-full" style="width: 18%"></div>
-            </div>
-          </div>
-
-          <div>
-            <div class="flex justify-between text-xs font-semibold mb-1">
-              <span>Fake Telegram Job Tasks</span>
-              <span class="text-purple-400 font-mono">12% Phishing share</span>
-            </div>
-            <div class="w-full bg-slate-800 rounded-full h-1.5">
-              <div class="bg-purple-500 h-1.5 rounded-full" style="width: 12%"></div>
-            </div>
-          </div>
+        </div>
+        <div class="text-2xl font-black text-white mt-3 font-mono" id="stat-threats">2,500</div>
+        <div class="flex items-center gap-1.5 text-[11px] text-red-400 font-medium mt-1">
+          <i class="ph-bold ph-trend-up"></i>
+          <span>+14.2% smishing spike this week</span>
         </div>
       </div>
 
-      <!-- Live Confusion Matrix -->
-      <div class="p-5 rounded-xl bg-slate-900/60 border border-slate-800">
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <i class="ph-bold ph-target text-emerald-400"></i> Confusion Matrix Telemetry
-        </h3>
-        <div class="grid grid-cols-2 gap-2 text-center text-xs">
-          <div class="p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-lg">
-            <div class="text-lg font-black text-emerald-400 font-mono">1,165</div>
-            <div class="text-[10px] text-slate-400 mt-1">True Positive (Caught)</div>
-          </div>
-          <div class="p-3 bg-amber-950/40 border border-amber-800/60 rounded-lg">
-            <div class="text-lg font-black text-amber-400 font-mono">64</div>
-            <div class="text-[10px] text-slate-400 mt-1">False Positive (Flagged)</div>
-          </div>
-          <div class="p-3 bg-red-950/40 border border-red-800/60 rounded-lg">
-            <div class="text-lg font-black text-red-400 font-mono">59</div>
-            <div class="text-[10px] text-slate-400 mt-1">False Negative (Missed)</div>
-          </div>
-          <div class="p-3 bg-slate-800/50 border border-slate-700/60 rounded-lg">
-            <div class="text-lg font-black text-slate-200 font-mono">1,212</div>
-            <div class="text-[10px] text-slate-400 mt-1">True Negative (Clean)</div>
+      <!-- Metric 2 -->
+      <div class="glass-panel glass-panel-hover p-4 rounded-2xl relative overflow-hidden">
+        <div class="flex justify-between items-start">
+          <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Ensemble F1-Score</span>
+          <div class="w-7 h-7 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+            <i class="ph-bold ph-target text-base"></i>
           </div>
         </div>
+        <div class="text-2xl font-black text-white mt-3 font-mono">94.0%</div>
+        <div class="flex items-center gap-1.5 text-[11px] text-cyan-400 font-medium mt-1">
+          <i class="ph-bold ph-check-circle"></i>
+          <span>Precision 94.8% · Recall 93.2%</span>
+        </div>
       </div>
-    </div>
-  </main>
+
+      <!-- Metric 3 -->
+      <div class="glass-panel glass-panel-hover p-4 rounded-2xl relative overflow-hidden">
+        <div class="flex justify-between items-start">
+          <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Inference Latency</span>
+          <div class="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
+            <i class="ph-bold ph-lightning text-base"></i>
+          </div>
+        </div>
+        <div class="text-2xl font-black text-white mt-3 font-mono">18.4ms</div>
+        <div class="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium mt-1">
+          <i class="ph-bold ph-gauge"></i>
+          <span>Sub-50ms hard SLA maintained</span>
+        </div>
+      </div>
+
+      <!-- Metric 4 -->
+      <div class="glass-panel glass-panel-hover p-4 rounded-2xl relative overflow-hidden">
+        <div class="flex justify-between items-start">
+          <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Community Consensus</span>
+          <div class="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+            <i class="ph-bold ph-users-three text-base"></i>
+          </div>
+        </div>
+        <div class="text-2xl font-black text-white mt-3 font-mono" id="stat-verifications">312</div>
+        <div class="flex items-center gap-1.5 text-[11px] text-indigo-400 font-medium mt-1">
+          <i class="ph-bold ph-thumbs-up"></i>
+          <span>Decentralized verified reports</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Main Workspace (2-Column Grid) -->
+    <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- Left 2-Cols: Live Threat Intel Moderation Feed -->
+      <div class="lg:col-span-2 space-y-4">
+        
+        <!-- Filter and Header Strip -->
+        <div class="glass-panel p-3.5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div class="flex items-center gap-2">
+            <i class="ph-bold ph-broadcast text-blue-400 text-lg"></i>
+            <h2 class="text-xs font-black uppercase tracking-wider text-white">Live Threat Stream & Moderation</h2>
+          </div>
+
+          <!-- Filter Pills -->
+          <div class="flex items-center gap-1.5 text-xs bg-slate-950/60 p-1 rounded-xl border border-white/5">
+            <button onclick="filterFeed('ALL')" id="filter-all" class="px-2.5 py-1 rounded-lg font-bold bg-blue-600 text-white transition">All</button>
+            <button onclick="filterFeed('PENDING')" id="filter-pending" class="px-2.5 py-1 rounded-lg font-bold text-slate-400 hover:text-white transition">Pending</button>
+            <button onclick="filterFeed('VERIFIED')" id="filter-verified" class="px-2.5 py-1 rounded-lg font-bold text-slate-400 hover:text-white transition">Verified</button>
+          </div>
+        </div>
+
+        <!-- Threat Cards Stream -->
+        <div id="reports-container" class="space-y-3">
+          <!-- Rendered dynamically with GSAP animation -->
+        </div>
+
+      </div>
+
+      <!-- Right 1-Col: Target Analytics & Telemetry -->
+      <div class="space-y-6">
+
+        <!-- Top Target Entities -->
+        <div class="glass-panel p-5 rounded-2xl space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <i class="ph-bold ph-shield-warning text-amber-400"></i> Top Scam Targets (India)
+            </h3>
+            <span class="text-[10px] font-mono text-slate-500">Live Volume</span>
+          </div>
+
+          <div class="space-y-3.5">
+            <div>
+              <div class="flex justify-between text-xs font-semibold mb-1.5">
+                <span class="text-slate-200">State Bank of India (SBI)</span>
+                <span class="text-red-400 font-mono font-bold">42%</span>
+              </div>
+              <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-white/5">
+                <div class="bg-gradient-to-r from-red-600 to-red-400 h-full rounded-full" style="width: 42%"></div>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs font-semibold mb-1.5">
+                <span class="text-slate-200">Electricity Utility Bills (Disconnection)</span>
+                <span class="text-amber-400 font-mono font-bold">28%</span>
+              </div>
+              <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-white/5">
+                <div class="bg-gradient-to-r from-amber-600 to-amber-400 h-full rounded-full" style="width: 28%"></div>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs font-semibold mb-1.5">
+                <span class="text-slate-200">HDFC NetBanking & Cards</span>
+                <span class="text-blue-400 font-mono font-bold">18%</span>
+              </div>
+              <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-white/5">
+                <div class="bg-gradient-to-r from-blue-600 to-blue-400 h-full rounded-full" style="width: 18%"></div>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs font-semibold mb-1.5">
+                <span class="text-slate-200">Fake Telegram Task / Part-Time Jobs</span>
+                <span class="text-purple-400 font-mono font-bold">12%</span>
+              </div>
+              <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-white/5">
+                <div class="bg-gradient-to-r from-purple-600 to-purple-400 h-full rounded-full" style="width: 12%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Telemetry Confusion Matrix -->
+        <div class="glass-panel p-5 rounded-2xl space-y-3.5">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <i class="ph-bold ph-chart-polar text-cyan-400"></i> Confusion Matrix Telemetry
+            </h3>
+            <span class="text-[10px] font-mono text-cyan-400">95.1% Acc</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 text-center text-xs">
+            <div class="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
+              <div class="text-xl font-black text-cyan-400 font-mono">1,165</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">True Positive (Caught)</div>
+            </div>
+            <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+              <div class="text-xl font-black text-amber-400 font-mono">64</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">False Positive (Flagged)</div>
+            </div>
+            <div class="p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+              <div class="text-xl font-black text-red-400 font-mono">59</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">False Negative (Missed)</div>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-800/40 border border-white/5">
+              <div class="text-xl font-black text-slate-300 font-mono">1,212</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">True Negative (Safe)</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
 
   <script>
+    let activeFilter = 'ALL';
     let reports = [
       {
         id: 'rep-1',
         category: 'SMISHING',
         title: 'Fake SBI KYC Update Notice with APK link',
         targetIdentifier: 'http://sbi-kyc-verify.top',
-        description: 'SMS claiming netbanking suspended, asking to download "sbi_kyc_update.apk" from unauthorized domain.',
+        description: 'SMS claiming netbanking suspended, prompting user to download "sbi_kyc_update.apk" from unauthorized server.',
         riskScore: 92,
         status: 'PENDING_REVIEW',
         upvotes: 142,
@@ -187,9 +344,9 @@
       {
         id: 'rep-2',
         category: 'UPI_FRAUD',
-        title: 'Electricity Bill Disconnection Fraud',
+        title: 'Electricity Bill Disconnection Threat',
         targetIdentifier: 'power-bill-help@okaxis',
-        description: 'WhatsApp message stating power will be cut tonight at 9:30 PM unless bill paid to a personal UPI VPA.',
+        description: 'WhatsApp broadcast asserting power connection will be terminated at 9:30 PM unless immediate UPI payment is executed.',
         riskScore: 88,
         status: 'PENDING_REVIEW',
         upvotes: 98,
@@ -198,9 +355,9 @@
       {
         id: 'rep-3',
         category: 'JOB_SCAM',
-        title: 'Telegram Part-time Video Rating Job',
+        title: 'Telegram Part-time Video Rating Scam',
         targetIdentifier: '+91 98765 43210',
-        description: 'Recruiter asking for Rs 1000 registration fee before assigning "work from home review tasks".',
+        description: 'Fraudulent recruiter soliciting Rs 1,000 security deposit before unlocking bogus YouTube review tasks.',
         riskScore: 78,
         status: 'VERIFIED',
         upvotes: 64,
@@ -208,54 +365,100 @@
       }
     ];
 
+    function filterFeed(filter) {
+      activeFilter = filter;
+      ['ALL', 'PENDING', 'VERIFIED'].forEach(f => {
+        const btn = document.getElementById(`filter-${f.toLowerCase()}`);
+        if (f === filter) {
+          btn.className = 'px-2.5 py-1 rounded-lg font-bold bg-blue-600 text-white transition';
+        } else {
+          btn.className = 'px-2.5 py-1 rounded-lg font-bold text-slate-400 hover:text-white transition';
+        }
+      });
+      renderReports();
+    }
+
     function renderReports() {
       const container = document.getElementById('reports-container');
       container.innerHTML = '';
       
-      const pending = reports.filter(r => r.status === 'PENDING_REVIEW').length;
-      document.getElementById('pending-count').innerText = `${pending} Pending Review`;
+      const filtered = reports.filter(r => {
+        if (activeFilter === 'ALL') return true;
+        if (activeFilter === 'PENDING') return r.status === 'PENDING_REVIEW';
+        if (activeFilter === 'VERIFIED') return r.status === 'VERIFIED';
+        return true;
+      });
 
-      reports.forEach(report => {
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="glass-panel p-10 rounded-2xl text-center space-y-2">
+            <i class="ph-duotone ph-shield-check text-4xl text-cyan-400 mx-auto"></i>
+            <h4 class="text-sm font-bold text-white">Queue Clear</h4>
+            <p class="text-xs text-slate-400">No threat vectors matching the current filter.</p>
+          </div>
+        `;
+        return;
+      }
+
+      filtered.forEach(report => {
         const isVerified = report.status === 'VERIFIED';
         const isDismissed = report.status === 'DISMISSED';
         
         const card = document.createElement('div');
-        card.className = `p-4 rounded-xl bg-slate-900 border border-slate-800 transition ${isVerified ? 'threat-card-danger' : isDismissed ? 'opacity-40 border-slate-800' : 'threat-card-warn'}`;
+        card.className = `glass-panel glass-panel-hover p-4 rounded-2xl relative overflow-hidden transition ${
+          isVerified ? 'threat-card-verified' : isDismissed ? 'opacity-40' : 'threat-card-pending'
+        }`;
         
         card.innerHTML = `
-          <div class="flex justify-between items-start gap-2">
-            <div>
-              <div class="flex items-center gap-2 mb-1">
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 uppercase">${report.category}</span>
-                <span class="text-xs font-mono text-slate-400">${report.time}</span>
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isVerified ? 'bg-red-950 text-red-400 border border-red-800' : isDismissed ? 'bg-slate-800 text-slate-400' : 'bg-amber-950 text-amber-400 border border-amber-800'}">
+          <div class="flex flex-col sm:flex-row justify-between sm:items-start gap-2">
+            <div class="space-y-1.5 flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-800 text-slate-300 border border-white/5 uppercase font-mono">${report.category}</span>
+                <span class="text-xs font-mono text-slate-500">${report.time}</span>
+                <span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                  isVerified 
+                    ? 'bg-red-500/10 text-red-400 border border-red-500/20' 
+                    : isDismissed 
+                    ? 'bg-slate-800 text-slate-400' 
+                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                }">
                   ${report.status.replace('_', ' ')}
                 </span>
               </div>
               <h4 class="text-sm font-bold text-white">${report.title}</h4>
-              <div class="text-xs font-mono text-red-400 mt-1 flex items-center gap-1">
+              <div class="text-xs font-mono text-red-400 flex items-center gap-1.5 break-all">
                 <i class="ph-bold ph-link"></i> ${report.targetIdentifier}
               </div>
-              <p class="text-xs text-slate-400 mt-1">${report.description}</p>
+              <p class="text-xs text-slate-400 leading-relaxed">${report.description}</p>
             </div>
-            <div class="text-right flex-shrink-0">
-              <span class="text-xs font-bold text-red-400 font-mono">Risk: ${report.riskScore}/100</span>
-              <div class="text-[11px] text-slate-500 mt-1">${report.upvotes} Confirmations</div>
+            
+            <div class="sm:text-right flex sm:flex-col justify-between items-end gap-1 flex-shrink-0 pt-2 sm:pt-0">
+              <span class="text-xs font-bold text-red-400 font-mono bg-red-500/10 px-2 py-1 rounded-md border border-red-500/20">Risk ${report.riskScore}/100</span>
+              <span class="text-[11px] text-slate-400 font-medium">${report.upvotes} Confirmations</span>
             </div>
           </div>
 
           ${!isVerified && !isDismissed ? `
-            <div class="flex gap-2 mt-4 pt-3 border-t border-slate-800/80">
-              <button onclick="moderateReport('${report.id}', 'VERIFIED')" class="flex-1 py-1.5 px-3 bg-red-600/90 hover:bg-red-600 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition">
+            <div class="flex gap-2 mt-4 pt-3 border-t border-surface-border">
+              <button onclick="moderateReport('${report.id}', 'VERIFIED')" class="flex-1 py-1.5 px-3 bg-red-600/90 hover:bg-red-600 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition active:scale-98">
                 <i class="ph-bold ph-shield-warning"></i> Confirm & Broadcast Threat
               </button>
-              <button onclick="moderateReport('${report.id}', 'DISMISSED')" class="py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition">
+              <button onclick="moderateReport('${report.id}', 'DISMISSED')" class="py-1.5 px-3 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition active:scale-98">
                 Dismiss
               </button>
             </div>
           ` : ''}
         `;
         container.appendChild(card);
+      });
+
+      // Animate entry with GSAP
+      gsap.from("#reports-container > div", {
+        opacity: 0,
+        y: 12,
+        duration: 0.35,
+        stagger: 0.05,
+        ease: "power2.out"
       });
     }
 
@@ -264,16 +467,30 @@
       renderReports();
     }
 
-    function refreshData() {
-      const btn = event.currentTarget;
-      btn.innerHTML = '<i class="ph-bold ph-arrows-clockwise animate-spin"></i> Syncing...';
+    function triggerSync() {
+      const btn = document.getElementById('sync-btn');
+      btn.innerHTML = '<i class="ph-bold ph-arrows-clockwise animate-spin text-sm"></i> <span>Syncing...</span>';
+      
+      gsap.to('#kpi-grid > div', {
+        scale: 0.98,
+        duration: 0.15,
+        yoyo: true,
+        repeat: 1,
+        ease: "power1.inOut"
+      });
+
       setTimeout(() => {
-        btn.innerHTML = '<i class="ph-bold ph-arrows-clockwise"></i> Sync Live Data';
+        btn.innerHTML = '<i class="ph-bold ph-arrows-clockwise text-sm"></i> <span>Sync Pipeline</span>';
         renderReports();
       }, 500);
     }
 
-    renderReports();
+    // Initial page load GSAP choreography
+    window.addEventListener('DOMContentLoaded', () => {
+      gsap.from("header", { opacity: 0, y: -20, duration: 0.5, ease: "power3.out" });
+      gsap.from("#kpi-grid > div", { opacity: 0, y: 20, duration: 0.5, stagger: 0.08, ease: "power3.out", delay: 0.1 });
+      renderReports();
+    });
   </script>
 </body>
 </html>
