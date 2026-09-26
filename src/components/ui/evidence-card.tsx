@@ -1,10 +1,11 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Radius, Spacing } from '@/constants/theme';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Radius, Spacing, Palette } from '@/constants/theme';
 import { AnalysisResult } from '@/types/security';
 import { RiskBadge } from '@/components/ui/risk-badge';
 import { useAppTheme } from '@/context/ThemeContext';
-import { Warning, CheckCircle, ShieldWarning, ArrowRight } from 'phosphor-react-native';
+import { Warning, CheckCircle, ArrowRight, PhoneCall, ShieldWarning } from 'phosphor-react-native';
+import { EmergencyKitModal } from '@/components/ui/emergency-kit-modal';
 
 interface EvidenceCardProps {
   result: AnalysisResult;
@@ -12,6 +13,9 @@ interface EvidenceCardProps {
 
 export function EvidenceCard({ result }: EvidenceCardProps) {
   const { colors, isDark } = useAppTheme();
+  const [showEmergencyKit, setShowEmergencyKit] = useState(false);
+
+  const isHighThreat = result.overallRisk === 'DANGEROUS' || result.riskScore >= 70;
 
   return (
     <View
@@ -19,7 +23,7 @@ export function EvidenceCard({ result }: EvidenceCardProps) {
         styles.container,
         {
           backgroundColor: colors.card,
-          borderColor: colors.cardBorder,
+          borderColor: isHighThreat ? 'rgba(220, 38, 38, 0.3)' : colors.cardBorder,
         },
       ]}
     >
@@ -37,6 +41,32 @@ export function EvidenceCard({ result }: EvidenceCardProps) {
       {/* Summary Narrative */}
       <View style={styles.body}>
         <Text style={[styles.summary, { color: colors.textPrimary }]}>{result.summary}</Text>
+
+        {/* Emergency SOS Banner for Critical Threats */}
+        {isHighThreat && (
+          <TouchableOpacity
+            style={[
+              styles.emergencyBanner,
+              {
+                backgroundColor: isDark ? 'rgba(220, 38, 38, 0.1)' : 'rgba(220, 38, 38, 0.06)',
+                borderColor: 'rgba(220, 38, 38, 0.25)',
+              },
+            ]}
+            onPress={() => setShowEmergencyKit(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.emergencyLeft}>
+              <PhoneCall size={16} color="#DC2626" weight="fill" />
+              <View>
+                <Text style={styles.emergencyTitle}>Accidentally Clicked or Shared Credentials?</Text>
+                <Text style={[styles.emergencySubtitle, { color: colors.textSecondary }]}>
+                  Open 1930 Cyber Helpline & Fund Freeze Kit
+                </Text>
+              </View>
+            </View>
+            <ArrowRight size={14} color="#DC2626" weight="bold" />
+          </TouchableOpacity>
+        )}
 
         {/* Signals List */}
         {result.signals.length > 0 && (
@@ -110,6 +140,13 @@ export function EvidenceCard({ result }: EvidenceCardProps) {
           </View>
         )}
       </View>
+
+      {/* Emergency Kit Modal */}
+      <EmergencyKitModal
+        visible={showEmergencyKit}
+        onClose={() => setShowEmergencyKit(false)}
+        detectedThreatContext={result.summary}
+      />
     </View>
   );
 }
@@ -147,6 +184,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     lineHeight: 21,
+  },
+  emergencyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.three,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+  },
+  emergencyLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  emergencyTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  emergencySubtitle: {
+    fontSize: 11,
+    marginTop: 1,
   },
   section: {
     gap: Spacing.two,

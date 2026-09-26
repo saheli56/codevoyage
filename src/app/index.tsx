@@ -21,6 +21,7 @@ import {
   ArrowRight,
   Sparkle,
   X,
+  PhoneCall,
 } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { analyzeMessage } from '@/services/riskEngine';
@@ -33,6 +34,7 @@ import { ModeBadge } from '@/components/ui/mode-badge';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { AnalysisResult } from '@/types/security';
 import { EvidenceCard } from '@/components/ui/evidence-card';
+import { EmergencyKitModal } from '@/components/ui/emergency-kit-modal';
 
 const SAMPLE_SCAM_SMS =
   'URGENT: Your SBI netbanking account is suspended due to expired KYC. Update immediately at http://sbi-kyc-verify.top or access will be blocked within 24 hours.';
@@ -51,6 +53,7 @@ export default function HomeScreen() {
   const [isAutoProtectionActive, setIsAutoProtectionActive] = useState(true);
   const [ocrImage, setOcrImage] = useState<string | null>(null);
   const [isProcessingOcr, setIsProcessingOcr] = useState(false);
+  const [showEmergencyKit, setShowEmergencyKit] = useState(false);
   const lastProcessedText = useRef('');
 
   useEffect(() => {
@@ -135,6 +138,20 @@ export default function HomeScreen() {
               <Text style={[styles.brandTitle, { color: colors.textPrimary }]}>ScamShield</Text>
             </View>
             <View style={styles.headerRight}>
+              <TouchableOpacity
+                style={[
+                  styles.sosBtn,
+                  {
+                    backgroundColor: isDark ? 'rgba(220, 38, 38, 0.12)' : 'rgba(220, 38, 38, 0.08)',
+                    borderColor: 'rgba(220, 38, 38, 0.25)',
+                  },
+                ]}
+                onPress={() => setShowEmergencyKit(true)}
+                activeOpacity={0.7}
+              >
+                <PhoneCall size={12} color="#DC2626" weight="fill" />
+                <Text style={styles.sosBtnText}>1930 SOS</Text>
+              </TouchableOpacity>
               <ThemeToggle />
               <ModeBadge />
             </View>
@@ -285,6 +302,11 @@ export default function HomeScreen() {
         {/* Evidence Card Result */}
         {analysisResult && <EvidenceCard result={analysisResult} />}
       </ScrollView>
+
+      <EmergencyKitModal
+        visible={showEmergencyKit}
+        onClose={() => setShowEmergencyKit(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -321,6 +343,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  sosBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  sosBtnText: {
+    color: '#DC2626',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   tagline: {
     fontSize: 12,
