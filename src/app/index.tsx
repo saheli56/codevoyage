@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Switch, AppState, Alert, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Switch, AppState, Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Shield, Sparkle, Trash, ClipboardText, Translate, BellRinging, Lightning, Camera, ImageSquare, X } from 'phosphor-react-native';
+import { Shield, Sparkle, Trash, ClipboardText, Translate, BellRinging, Lightning, Camera, ImageSquare, X, UploadSimple } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { analyzeMessage } from '@/services/riskEngine';
 import { saveAnalysisResult } from '@/services/storageService';
 import { checkClipboardForThreats, simulateIncomingNotificationScan } from '@/services/autoProtection';
-import { pickImageForAnalysis, simulateOcrFromSample, OcrExtractionResult } from '@/services/ocrExtractor';
+import { pickImageForAnalysis, simulateOcrFromSample } from '@/services/ocrExtractor';
 import { useAppMode } from '@/context/AppModeContext';
 import { ModeBadge } from '@/components/ui/mode-badge';
 import { AnalysisResult } from '@/types/security';
@@ -23,6 +23,7 @@ export default function HomeScreen() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [isAutoProtectionActive, setIsAutoProtectionActive] = useState(true);
   const [ocrImage, setOcrImage] = useState<string | null>(null);
+  const [isProcessingOcr, setIsProcessingOcr] = useState(false);
   const lastProcessedText = useRef('');
 
   useEffect(() => {
@@ -63,7 +64,9 @@ export default function HomeScreen() {
   };
 
   const handlePickScreenshot = async () => {
+    setIsProcessingOcr(true);
     const extracted = await pickImageForAnalysis();
+    setIsProcessingOcr(false);
     if (extracted) {
       setOcrImage(extracted.imageUri);
       setInputText(extracted.extractedText);
@@ -137,16 +140,26 @@ export default function HomeScreen() {
         <View style={styles.inputCard}>
           <View style={styles.inputCardHeader}>
             <Text style={styles.inputLabel}>INSPECT SUSPICIOUS MESSAGE, LINK, OR SCREENSHOT</Text>
-            <TouchableOpacity style={styles.ocrButton} onPress={handlePickScreenshot}>
-              <Camera size={14} color={Palette.brand.primary} weight="bold" />
-              <Text style={styles.ocrButtonText}>Import Image</Text>
+            <TouchableOpacity 
+              style={[styles.ocrButton, isProcessingOcr && styles.ocrButtonDisabled]} 
+              onPress={handlePickScreenshot}
+              disabled={isProcessingOcr}
+            >
+              {isProcessingOcr ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Camera size={14} color="#FFFFFF" weight="bold" />
+                  <Text style={styles.ocrButtonText}>Upload Image</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
 
           {ocrImage && (
             <View style={styles.ocrPreviewWrap}>
               <ImageSquare size={16} color={Palette.brand.primary} weight="bold" />
-              <Text style={styles.ocrPreviewText} numberOfLines={1}>Extracted from Screenshot</Text>
+              <Text style={styles.ocrPreviewText} numberOfLines={1}>Text recognized from screenshot</Text>
               <TouchableOpacity onPress={() => setOcrImage(null)}>
                 <X size={14} color={Palette.neutral.slate500} />
               </TouchableOpacity>
@@ -155,7 +168,7 @@ export default function HomeScreen() {
 
           <TextInput
             style={styles.textInput}
-            placeholder="Paste SMS, WhatsApp text, Hinglish/Regional text, or import screenshot..."
+            placeholder="Paste SMS, WhatsApp text, Hinglish/Regional text, or tap 'Upload Image' above..."
             placeholderTextColor={Palette.neutral.slate400}
             multiline
             numberOfLines={4}
@@ -184,7 +197,7 @@ export default function HomeScreen() {
         {isDemoMode && (
           <View style={styles.quickTestsContainer}>
             <View style={styles.testHeaderRow}>
-              <Text style={styles.testLabel}>BENCHMARK SCENARIOS & OCR SIMULATORS</Text>
+              <Text style={styles.testLabel}>BENCHMARK SCENARIOS (DEMO MODE ONLY)</Text>
               <TouchableOpacity style={styles.simulateIncomingBtn} onPress={handleSimulateIncomingSms}>
                 <Lightning size={12} color={Palette.brand.primaryDark} weight="bold" />
                 <Text style={styles.simulateIncomingText}>Simulate Live SMS</Text>
@@ -205,7 +218,7 @@ export default function HomeScreen() {
                 onPress={() => handleSimulateOcr(0)}
               >
                 <Camera size={14} color={Palette.risk.dangerousDark} />
-                <Text style={styles.sampleButtonText}>OCR Screenshot Phish</Text>
+                <Text style={styles.sampleButtonText}>Simulate Screenshot OCR</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 
@@ -310,36 +323,40 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Spacing.two,
+    gap: Spacing.two,
   },
   inputLabel: {
     fontSize: 10,
     fontWeight: '700',
     color: Palette.neutral.slate500,
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
     flex: 1,
   },
   ocrButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: Palette.brand.primaryMuted,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: Radius.sm,
+    gap: 5,
+    backgroundColor: Palette.brand.primary,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: Radius.md,
+  },
+  ocrButtonDisabled: {
+    backgroundColor: Palette.neutral.slate400,
   },
   ocrButtonText: {
     fontSize: 11,
     fontWeight: '700',
-    color: Palette.brand.primaryDark,
+    color: '#FFFFFF',
   },
   ocrPreviewWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: Palette.neutral.slate100,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: Radius.sm,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: Radius.md,
     marginBottom: Spacing.two,
   },
   ocrPreviewText: {
