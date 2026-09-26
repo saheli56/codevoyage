@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Switch, AppState, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Shield, Sparkle, Trash, ClipboardText, Translate, BellRinging, Lightning } from 'phosphor-react-native';
+import { Shield, Sparkle, Trash, ClipboardText, Translate, BellRinging, Lightning, ToggleLeft, ToggleRight } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { analyzeMessage } from '@/services/riskEngine';
 import { saveAnalysisResult } from '@/services/storageService';
 import { checkClipboardForThreats, requestNotificationPermissions, simulateIncomingNotificationScan } from '@/services/autoProtection';
+import { useAppMode } from '@/context/AppModeContext';
 import { AnalysisResult } from '@/types/security';
 import { EvidenceCard } from '@/components/ui/evidence-card';
 
@@ -15,6 +16,7 @@ const SAMPLE_SAFE_SMS = 'Your HDFC Bank account credit card ending in 4021 was c
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const { isDemoMode, toggleDemoMode } = useAppMode();
   const [inputText, setInputText] = useState('');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [isAutoProtectionActive, setIsAutoProtectionActive] = useState(true);
@@ -84,10 +86,25 @@ export default function HomeScreen() {
       >
         <View style={styles.header}>
           <View style={styles.logoRow}>
-            <Shield size={24} color={Palette.brand.primary} weight="fill" />
-            <Text style={styles.appTitle}>ScamShield</Text>
+            <View style={styles.titleGroup}>
+              <Shield size={24} color={Palette.brand.primary} weight="fill" />
+              <Text style={styles.appTitle}>ScamShield</Text>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.modeToggle, isDemoMode ? styles.modeDemo : styles.modeLive]} 
+              onPress={toggleDemoMode}
+            >
+              <Text style={[styles.modeToggleText, isDemoMode ? styles.modeDemoText : styles.modeLiveText]}>
+                {isDemoMode ? 'DEMO MODE' : 'LIVE MODE'}
+              </Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.appSubtitle}>Automated Financial Threat & Scam Intelligence</Text>
+          <Text style={styles.appSubtitle}>
+            {isDemoMode 
+              ? 'Demo Mode Active: Interactive vectors & live stream simulators enabled'
+              : 'Production Mode Active: Live inputs only, dummy samples hidden'}
+          </Text>
         </View>
 
         <View style={styles.autoProtectBanner}>
@@ -140,41 +157,43 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View style={styles.quickTestsContainer}>
-          <View style={styles.testHeaderRow}>
-            <Text style={styles.testLabel}>BENCHMARK SCENARIOS</Text>
-            <TouchableOpacity style={styles.simulateIncomingBtn} onPress={handleSimulateIncomingSms}>
-              <Lightning size={12} color={Palette.brand.primaryDark} weight="bold" />
-              <Text style={styles.simulateIncomingText}>Simulate Live SMS</Text>
-            </TouchableOpacity>
+        {isDemoMode && (
+          <View style={styles.quickTestsContainer}>
+            <View style={styles.testHeaderRow}>
+              <Text style={styles.testLabel}>BENCHMARK SCENARIOS</Text>
+              <TouchableOpacity style={styles.simulateIncomingBtn} onPress={handleSimulateIncomingSms}>
+                <Lightning size={12} color={Palette.brand.primaryDark} weight="bold" />
+                <Text style={styles.simulateIncomingText}>Simulate Live SMS</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sampleButtonsRow}>
+              <TouchableOpacity 
+                style={styles.sampleButton}
+                onPress={() => loadSample(SAMPLE_SCAM_SMS)}
+              >
+                <ClipboardText size={14} color={Palette.brand.primary} />
+                <Text style={styles.sampleButtonText}>KYC Phish (EN)</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.sampleButton}
+                onPress={() => loadSample(SAMPLE_REGIONAL_SMS)}
+              >
+                <Translate size={14} color={Palette.risk.suspiciousDark} />
+                <Text style={styles.sampleButtonText}>Electricity Bill (Hinglish)</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.sampleButton}
+                onPress={() => loadSample(SAMPLE_SAFE_SMS)}
+              >
+                <ClipboardText size={14} color={Palette.risk.safeDark} />
+                <Text style={styles.sampleButtonText}>Legit Alert</Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sampleButtonsRow}>
-            <TouchableOpacity 
-              style={styles.sampleButton}
-              onPress={() => loadSample(SAMPLE_SCAM_SMS)}
-            >
-              <ClipboardText size={14} color={Palette.brand.primary} />
-              <Text style={styles.sampleButtonText}>KYC Phish (EN)</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.sampleButton}
-              onPress={() => loadSample(SAMPLE_REGIONAL_SMS)}
-            >
-              <Translate size={14} color={Palette.risk.suspiciousDark} />
-              <Text style={styles.sampleButtonText}>Electricity Bill (Hinglish)</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.sampleButton}
-              onPress={() => loadSample(SAMPLE_SAFE_SMS)}
-            >
-              <ClipboardText size={14} color={Palette.risk.safeDark} />
-              <Text style={styles.sampleButtonText}>Legit Alert</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
+        )}
 
         {analysisResult && (
           <EvidenceCard result={analysisResult} />
@@ -199,6 +218,11 @@ const styles = StyleSheet.create({
   logoRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  titleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.two,
   },
   appTitle: {
@@ -207,10 +231,35 @@ const styles = StyleSheet.create({
     color: Palette.neutral.slate900,
     letterSpacing: -0.5,
   },
+  modeToggle: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  modeDemo: {
+    backgroundColor: Palette.brand.primaryMuted,
+    borderColor: Palette.brand.primary,
+  },
+  modeLive: {
+    backgroundColor: Palette.risk.safeLight,
+    borderColor: Palette.risk.safe,
+  },
+  modeToggleText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  modeDemoText: {
+    color: Palette.brand.primaryDark,
+  },
+  modeLiveText: {
+    color: Palette.risk.safeDark,
+  },
   appSubtitle: {
     fontSize: 12,
     color: Palette.neutral.slate500,
-    marginTop: 2,
+    marginTop: 4,
   },
   autoProtectBanner: {
     flexDirection: 'row',

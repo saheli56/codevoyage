@@ -4,10 +4,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BellRinging, ShieldWarning, ShieldCheck, Lightning, ChatCircleDots, DeviceMobile, CreditCard, Trash } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { InterceptedNotification, getLiveNotificationFeed, pushInterceptedNotification, clearLiveFeed } from '@/services/liveNotificationFeed';
+import { useAppMode } from '@/context/AppModeContext';
 import { RiskBadge } from '@/components/ui/risk-badge';
 
 export default function LiveFeedScreen() {
   const insets = useSafeAreaInsets();
+  const { isDemoMode } = useAppMode();
   const [feed, setFeed] = useState<InterceptedNotification[]>([]);
   const [filter, setFilter] = useState<'ALL' | 'THREATS_ONLY' | 'SAFE_ONLY'>('ALL');
   const [refreshing, setRefreshing] = useState(false);
@@ -174,26 +176,28 @@ export default function LiveFeedScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.simulationBar}>
-        <Text style={styles.simLabel}>LIVE STREAM SIMULATION:</Text>
-        <View style={styles.simButtonsRow}>
-          <TouchableOpacity 
-            style={styles.simThreatBtn}
-            onPress={() => handleSimulateNewIncoming('DANGEROUS')}
-          >
-            <Lightning size={12} color={Palette.risk.dangerousDark} weight="bold" />
-            <Text style={styles.simThreatText}>Simulate Fraud Alert</Text>
-          </TouchableOpacity>
+      {isDemoMode && (
+        <View style={styles.simulationBar}>
+          <Text style={styles.simLabel}>LIVE STREAM SIMULATION (DEMO MODE):</Text>
+          <View style={styles.simButtonsRow}>
+            <TouchableOpacity 
+              style={styles.simThreatBtn}
+              onPress={() => handleSimulateNewIncoming('DANGEROUS')}
+            >
+              <Lightning size={12} color={Palette.risk.dangerousDark} weight="bold" />
+              <Text style={styles.simThreatText}>Simulate Fraud Alert</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.simSafeBtn}
-            onPress={() => handleSimulateNewIncoming('SAFE')}
-          >
-            <Lightning size={12} color={Palette.risk.safeDark} weight="bold" />
-            <Text style={styles.simSafeText}>Simulate Safe Alert</Text>
-          </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.simSafeBtn}
+              onPress={() => handleSimulateNewIncoming('SAFE')}
+            >
+              <Lightning size={12} color={Palette.risk.safeDark} weight="bold" />
+              <Text style={styles.simSafeText}>Simulate Safe Alert</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      )}
 
       <FlatList
         data={filteredFeed}

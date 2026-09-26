@@ -5,6 +5,7 @@ import { CurrencyInr, WarningCircle, ArrowCounterClockwise, ShieldCheck } from '
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { analyzePaymentRisk } from '@/services/paymentAnalyzer';
 import { saveAnalysisResult } from '@/services/storageService';
+import { useAppMode } from '@/context/AppModeContext';
 import { AnalysisResult } from '@/types/security';
 import { EvidenceCard } from '@/components/ui/evidence-card';
 
@@ -17,6 +18,7 @@ const SAMPLE_SCAM_PAYMENT = {
 
 export default function PaymentRiskScreen() {
   const insets = useSafeAreaInsets();
+  const { isDemoMode } = useAppMode();
   const [amount, setAmount] = useState('');
   const [recipientVpa, setRecipientVpa] = useState('');
   const [contextNote, setContextNote] = useState('');
@@ -144,13 +146,15 @@ export default function PaymentRiskScreen() {
           </View>
         </View>
 
-        <View style={styles.quickTestsContainer}>
-          <Text style={styles.testLabel}>SIMULATE RISK SCENARIO</Text>
-          <TouchableOpacity style={styles.simButton} onPress={loadSimulatedScam}>
-            <WarningCircle size={16} color={Palette.risk.dangerous} weight="bold" />
-            <Text style={styles.simButtonText}>Load High-Risk Advance-Fee Vector</Text>
-          </TouchableOpacity>
-        </View>
+        {isDemoMode && (
+          <View style={styles.quickTestsContainer}>
+            <Text style={styles.testLabel}>SIMULATE RISK SCENARIO</Text>
+            <TouchableOpacity style={styles.simButton} onPress={loadSimulatedScam}>
+              <WarningCircle size={16} color={Palette.risk.dangerous} weight="bold" />
+              <Text style={styles.simButtonText}>Load High-Risk Advance-Fee Vector</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {result && (
           <EvidenceCard result={result} />
