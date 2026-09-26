@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Switch, AppState, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Switch, AppState, Alert, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Shield, Sparkle, Trash, ClipboardText, Translate, BellRinging, Lightning } from 'phosphor-react-native';
+import { Shield, Sparkle, Trash, ClipboardText, Translate, BellRinging, Lightning, Camera, ImageSquare, X } from 'phosphor-react-native';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { analyzeMessage } from '@/services/riskEngine';
 import { saveAnalysisResult } from '@/services/storageService';
 import { checkClipboardForThreats, simulateIncomingNotificationScan } from '@/services/autoProtection';
+import { pickImageForAnalysis, simulateOcrFromSample, OcrExtractionResult } from '@/services/ocrExtractor';
 import { useAppMode } from '@/context/AppModeContext';
 import { ModeBadge } from '@/components/ui/mode-badge';
 import { AnalysisResult } from '@/types/security';
@@ -21,6 +22,7 @@ export default function HomeScreen() {
   const [inputText, setInputText] = useState('');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [isAutoProtectionActive, setIsAutoProtectionActive] = useState(true);
+  const [ocrImage, setOcrImage] = useState<string | null>(null);
   const lastProcessedText = useRef('');
 
   useEffect(() => {
@@ -51,11 +53,30 @@ export default function HomeScreen() {
   const handleClear = () => {
     setInputText('');
     setAnalysisResult(null);
+    setOcrImage(null);
   };
 
   const loadSample = (sample: string) => {
     setInputText(sample);
+    setOcrImage(null);
     handleAnalyze(sample);
+  };
+
+  const handlePickScreenshot = async () => {
+    const extracted = await pickImageForAnalysis();
+    if (extracted) {
+      setOcrImage(extracted.imageUri);
+      setInputText(extracted.extractedText);
+      setAnalysisResult(extracted.analysis);
+      await saveAnalysisResult(extracted.analysis);
+    }
+  };
+
+  const handleSimulateOcr = (idx: number = 0) => {
+    const extracted = simulateOcrFromSample(idx);
+    setOcrImage(extracted.imageUri);
+    setInputText(extracted.extractedText);
+    setAnalysisResult(extracted.analysis);
   };
 
   const handleSimulateIncomingSms = async () => {
@@ -88,7 +109,7 @@ export default function HomeScreen() {
           </View>
           <Text style={styles.appSubtitle}>
             {isDemoMode 
-              ? 'Demo Mode Active: Interactive vectors & live stream simulators enabled'
+              ? 'Demo Mode Active: Interactive vectors, OCR picker & simulators enabled'
               : 'Production Mode Active: Live inputs only, dummy samples hidden'}
           </Text>
         </View>
@@ -114,10 +135,27 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.inputCard}>
-          <Text style={styles.inputLabel}>INSPECT SUSPICIOUS MESSAGE OR LINK</Text>
+          <View style={styles.inputCardHeader}>
+            <Text style={styles.inputLabel}>INSPECT SUSPICIOUS MESSAGE, LINK, OR SCREENSHOT</Text>
+            <TouchableOpacity style={styles.ocrButton} onPress={handlePickScreenshot}>
+              <Camera size={14} color={Palette.brand.primary} weight="bold" />
+              <Text style={styles.ocrButtonText}>Import Image</Text>
+            </TouchableOpacity>
+          </View>
+
+          {ocrImage && (
+            <View style={styles.ocrPreviewWrap}>
+              <ImageSquare size={16} color={Palette.brand.primary} weight="bold" />
+              <Text style={styles.ocrPreviewText} numberOfLines={1}>Extracted from Screenshot</Text>
+              <TouchableOpacity onPress={() => setOcrImage(null)}>
+                <X size={14} color={Palette.neutral.slate500} />
+              </TouchableOpacity>
+            </View>
+          )}
+
           <TextInput
             style={styles.textInput}
-            placeholder="Paste SMS, WhatsApp, Hinglish/Regional text, or phishing link..."
+            placeholder="Paste SMS, WhatsApp text, Hinglish/Regional text, or import screenshot..."
             placeholderTextColor={Palette.neutral.slate400}
             multiline
             numberOfLines={4}
@@ -146,7 +184,7 @@ export default function HomeScreen() {
         {isDemoMode && (
           <View style={styles.quickTestsContainer}>
             <View style={styles.testHeaderRow}>
-              <Text style={styles.testLabel}>BENCHMARK SCENARIOS</Text>
+              <Text style={styles.testLabel}>BENCHMARK SCENARIOS & OCR SIMULATORS</Text>
               <TouchableOpacity style={styles.simulateIncomingBtn} onPress={handleSimulateIncomingSms}>
                 <Lightning size={12} color={Palette.brand.primaryDark} weight="bold" />
                 <Text style={styles.simulateIncomingText}>Simulate Live SMS</Text>
@@ -164,10 +202,18 @@ export default function HomeScreen() {
 
               <TouchableOpacity 
                 style={styles.sampleButton}
+                onPress={() => handleSimulateOcr(0)}
+              >
+                <Camera size={14} color={Palette.risk.dangerousDark} />
+                <Text style={styles.sampleButtonText}>OCR Screenshot Phish</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.sampleButton}
                 onPress={() => loadSample(SAMPLE_REGIONAL_SMS)}
               >
                 <Translate size={14} color={Palette.risk.suspiciousDark} />
-                <Text style={styles.sampleButtonText}>Electricity Bill (Hinglish)</Text>
+                <Text style={styles.sampleButtonText}>Electricity (Hinglish)</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 
@@ -259,12 +305,48 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Palette.neutral.slate200,
   },
+  inputCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.two,
+  },
   inputLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: Palette.neutral.slate500,
     letterSpacing: 0.8,
+    flex: 1,
+  },
+  ocrButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Palette.brand.primaryMuted,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: Radius.sm,
+  },
+  ocrButtonText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Palette.brand.primaryDark,
+  },
+  ocrPreviewWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Palette.neutral.slate100,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: Radius.sm,
     marginBottom: Spacing.two,
+  },
+  ocrPreviewText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '600',
+    color: Palette.neutral.slate700,
   },
   textInput: {
     minHeight: 90,
