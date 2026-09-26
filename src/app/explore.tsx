@@ -1,180 +1,304 @@
-import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Switch, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CurrencyInr, WarningCircle, ArrowCounterClockwise, ShieldCheck } from 'phosphor-react-native';
+import { Palette, Radius, Spacing } from '@/constants/theme';
+import { analyzePaymentRisk } from '@/services/paymentAnalyzer';
+import { saveAnalysisResult } from '@/services/storageService';
+import { AnalysisResult } from '@/types/security';
+import { EvidenceCard } from '@/components/ui/evidence-card';
 
-import { ExternalLink } from '@/components/external-link';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+const SAMPLE_SCAM_PAYMENT = {
+  amount: '15000',
+  recipientVpa: 'sbi-lottery-support@okaxis',
+  isNewBeneficiary: true,
+  contextNote: 'Refund processing registration fee'
+};
 
-export default function TabTwoScreen() {
-  const safeAreaInsets = useSafeAreaInsets();
-  const insets = {
-    ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
+export default function PaymentRiskScreen() {
+  const insets = useSafeAreaInsets();
+  const [amount, setAmount] = useState('');
+  const [recipientVpa, setRecipientVpa] = useState('');
+  const [contextNote, setContextNote] = useState('');
+  const [isNewBeneficiary, setIsNewBeneficiary] = useState(true);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+
+  const handleAssess = async (customParams?: typeof SAMPLE_SCAM_PAYMENT) => {
+    const params = customParams || {
+      amount,
+      recipientVpa,
+      isNewBeneficiary,
+      contextNote
+    };
+
+    if (!params.recipientVpa.trim()) return;
+
+    const res = analyzePaymentRisk(params);
+    setResult(res);
+    await saveAnalysisResult(res);
   };
-  const theme = useTheme();
 
-  const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
-    },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
-    },
-  });
+  const handleReset = () => {
+    setAmount('');
+    setRecipientVpa('');
+    setContextNote('');
+    setIsNewBeneficiary(true);
+    setResult(null);
+  };
+
+  const loadSimulatedScam = () => {
+    setAmount(SAMPLE_SCAM_PAYMENT.amount);
+    setRecipientVpa(SAMPLE_SCAM_PAYMENT.recipientVpa);
+    setContextNote(SAMPLE_SCAM_PAYMENT.contextNote);
+    setIsNewBeneficiary(SAMPLE_SCAM_PAYMENT.isNewBeneficiary);
+    handleAssess(SAMPLE_SCAM_PAYMENT);
+  };
 
   return (
-    <ScrollView
-      style={[styles.scrollView, { backgroundColor: theme.background }]}
-      contentInset={insets}
-      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
-      <ThemedView style={styles.container}>
-        <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Explore</ThemedText>
-          <ThemedText style={styles.centerText} themeColor="textSecondary">
-            This starter app includes example{'\n'}code to help you get started.
-          </ThemedText>
+    <KeyboardAvoidingView 
+      style={[styles.container, { paddingTop: insets.top }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView 
+        contentContainerStyle={[
+          styles.scrollContent, 
+          { paddingBottom: insets.bottom + 90 }
+        ]} 
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <View style={styles.badgeRow}>
+            <CurrencyInr size={22} color={Palette.brand.primary} weight="bold" />
+            <Text style={styles.screenTitle}>Payment Risk Simulator</Text>
+          </View>
+          <Text style={styles.screenSubtitle}>
+            Pre-flight transaction screening before authorizing UPI or NetBanking transfers.
+          </Text>
+        </View>
 
-          <ExternalLink href="https://docs.expo.dev" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Expo documentation</ThemedText>
-                <SymbolView
-                  tintColor={theme.text}
-                  name={{ ios: 'arrow.up.right.square', android: 'link', web: 'link' }}
-                  size={12}
-                />
-              </ThemedView>
-            </Pressable>
-          </ExternalLink>
-        </ThemedView>
+        <View style={styles.formCard}>
+          <Text style={styles.formSectionLabel}>TRANSACTION PARAMETERS</Text>
 
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="File-based routing">
-            <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/explore.tsx</ThemedText>
-            </ThemedText>
-            <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/_layout.tsx</ThemedText> sets up
-              the tab navigator.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/router/introduction">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Transfer Amount (INR)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 5000"
+              placeholderTextColor={Palette.neutral.slate400}
+              keyboardType="numeric"
+              value={amount}
+              onChangeText={setAmount}
+            />
+          </View>
 
-          <Collapsible title="Android, iOS, and web support">
-            <ThemedView type="backgroundElement" style={styles.collapsibleContent}>
-              <ThemedText type="small">
-                You can open this project on Android, iOS, and the web. To open the web version,
-                press <ThemedText type="smallBold">w</ThemedText> in the terminal running this
-                project.
-              </ThemedText>
-              <Image
-                source={require('@/assets/images/tutorial-web.png')}
-                style={styles.imageTutorial}
-              />
-            </ThemedView>
-          </Collapsible>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Recipient UPI ID / VPA</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. merchant@okaxis or user@upi"
+              placeholderTextColor={Palette.neutral.slate400}
+              autoCapitalize="none"
+              value={recipientVpa}
+              onChangeText={setRecipientVpa}
+            />
+          </View>
 
-          <Collapsible title="Images">
-            <ThemedText type="small">
-              For static images, you can use the <ThemedText type="code">@2x</ThemedText> and{' '}
-              <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
-              screen densities.
-            </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
-            <ExternalLink href="https://reactnative.dev/docs/images">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Payment Purpose / Remarks</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. advance tax, refund fee, verification"
+              placeholderTextColor={Palette.neutral.slate400}
+              value={contextNote}
+              onChangeText={setContextNote}
+            />
+          </View>
 
-          <Collapsible title="Light and dark mode components">
-            <ThemedText type="small">
-              This template has light and dark mode support. The{' '}
-              <ThemedText type="code">useColorScheme()</ThemedText> hook lets you inspect what the
-              user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+          <View style={styles.switchRow}>
+            <View style={styles.switchTextContainer}>
+              <Text style={styles.switchLabel}>First-Time Beneficiary</Text>
+              <Text style={styles.switchSubtext}>No prior transaction history with this recipient</Text>
+            </View>
+            <Switch
+              value={isNewBeneficiary}
+              onValueChange={setIsNewBeneficiary}
+              trackColor={{ false: Palette.neutral.slate200, true: Palette.brand.primary }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
 
-          <Collapsible title="Animations">
-            <ThemedText type="small">
-              This template includes an example of an animated component. The{' '}
-              <ThemedText type="code">src/components/ui/collapsible.tsx</ThemedText> component uses
-              the powerful <ThemedText type="code">react-native-reanimated</ThemedText> library to
-              animate opening this hint.
-            </ThemedText>
-          </Collapsible>
-        </ThemedView>
-        {Platform.OS === 'web' && <WebBadge />}
-      </ThemedView>
-    </ScrollView>
+          <View style={styles.actionRow}>
+            <TouchableOpacity 
+              style={[styles.primaryButton, !recipientVpa.trim() && styles.disabledButton]}
+              onPress={() => handleAssess()}
+              disabled={!recipientVpa.trim()}
+            >
+              <ShieldCheck size={18} color="#FFFFFF" weight="bold" />
+              <Text style={styles.primaryButtonText}>Assess Payment Risk</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.iconButton} onPress={handleReset}>
+              <ArrowCounterClockwise size={18} color={Palette.neutral.slate500} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.quickTestsContainer}>
+          <Text style={styles.testLabel}>SIMULATE RISK SCENARIO</Text>
+          <TouchableOpacity style={styles.simButton} onPress={loadSimulatedScam}>
+            <WarningCircle size={16} color={Palette.risk.dangerous} weight="bold" />
+            <Text style={styles.simButtonText}>Load High-Risk Advance-Fee Vector</Text>
+          </TouchableOpacity>
+        </View>
+
+        {result && (
+          <EvidenceCard result={result} />
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
   container: {
-    maxWidth: MaxContentWidth,
-    flexGrow: 1,
+    flex: 1,
+    backgroundColor: Palette.neutral.slate50,
   },
-  titleContainer: {
-    gap: Spacing.three,
-    alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
+  scrollContent: {
+    padding: Spacing.four,
   },
-  centerText: {
-    textAlign: 'center',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  linkButton: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
-    justifyContent: 'center',
-    gap: Spacing.one,
-    alignItems: 'center',
-  },
-  sectionsWrapper: {
-    gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-  },
-  collapsibleContent: {
-    alignItems: 'center',
-  },
-  imageTutorial: {
-    width: '100%',
-    aspectRatio: 296 / 171,
-    borderRadius: Spacing.three,
+  header: {
+    marginBottom: Spacing.three,
     marginTop: Spacing.two,
   },
-  imageReact: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
   },
+  screenTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Palette.neutral.slate900,
+    letterSpacing: -0.5,
+  },
+  screenSubtitle: {
+    fontSize: 12,
+    color: Palette.neutral.slate500,
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  formCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    padding: Spacing.four,
+    borderWidth: 1,
+    borderColor: Palette.neutral.slate200,
+  },
+  formSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Palette.neutral.slate500,
+    letterSpacing: 0.8,
+    marginBottom: Spacing.two,
+  },
+  fieldGroup: {
+    marginBottom: Spacing.two,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Palette.neutral.slate700,
+    marginBottom: Spacing.one,
+  },
+  input: {
+    backgroundColor: Palette.neutral.slate50,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: Palette.neutral.slate900,
+    borderWidth: 1,
+    borderColor: Palette.neutral.slate200,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.two,
+    borderTopWidth: 1,
+    borderTopColor: Palette.neutral.slate100,
+    marginTop: Spacing.one,
+    marginBottom: Spacing.two,
+  },
+  switchTextContainer: {
+    flex: 1,
+    marginRight: Spacing.two,
+  },
+  switchLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Palette.neutral.slate900,
+  },
+  switchSubtext: {
+    fontSize: 11,
+    color: Palette.neutral.slate500,
+    marginTop: 2,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing.one,
+  },
+  primaryButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Palette.brand.primary,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    gap: Spacing.two,
+  },
+  disabledButton: {
+    backgroundColor: Palette.neutral.slate300,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  iconButton: {
+    padding: 10,
+    marginLeft: Spacing.two,
+    borderRadius: Radius.md,
+    backgroundColor: Palette.neutral.slate100,
+  },
+  quickTestsContainer: {
+    marginTop: Spacing.three,
+  },
+  testLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Palette.neutral.slate400,
+    letterSpacing: 0.8,
+    marginBottom: Spacing.two,
+  },
+  simButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    backgroundColor: Palette.risk.dangerousLight,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Palette.risk.dangerousBorder,
+  },
+  simButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Palette.risk.dangerousDark,
+  }
 });
